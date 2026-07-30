@@ -1,0 +1,19 @@
+name: PR 라벨 적용
+
+on:
+    pull_request_target:
+        types:
+            - opened
+            - synchronize
+            - reopened
+
+permissions:
+    contents: read
+    pull-requests: write
+
+jobs:
+    labeler:
+        runs-on: ubuntu-latest
+        steps:
+            - name: 라벨 적용
+              uses: actions/labeler@v6

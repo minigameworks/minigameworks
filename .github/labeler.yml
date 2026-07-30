@@ -1,0 +1,36 @@
+문서:
+    - changed-files:
+          - any-glob-to-any-file:
+                - '**/*.md'
+                - 'notes/**'
+
+에이전트:
+    - changed-files:
+          - any-glob-to-any-file:
+                - 'AGENTS.md'
+                - 'CLAUDE.md'
+
+설정:
+    - changed-files:
+          - any-glob-to-any-file:
+                - '*.config.*'
+                - '.vscode/**'
+                - 'package.json'
+                - 'package-lock.json'
+
+테스트:
+    - changed-files:
+          - any-glob-to-any-file:
+                - 'tests/**'
+                - '**/*.test.ts'
+                - '**/*.spec.ts'
+
+CI/CD:
+    - changed-files:
+          - any-glob-to-any-file:
+                - '.github/workflows/**'
+
+에셋:
+    - changed-files:
+          - any-glob-to-any-file:
+                - 'public/assets/**'
