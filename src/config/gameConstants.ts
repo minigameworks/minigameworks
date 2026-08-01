@@ -61,7 +61,7 @@ export const TEMPORARY_SNAIL_CONTROL = {
     normalClimbSpeed: 1.2,
     normalClimbDownSpeed: 1.4,
     normalAttachMoveSpeed: 1.4,
-    wallSlideSpeed: 0.35,
+    normalPassiveSlideSpeed: 0.35,
     shellMoveAcceleration: 0.42,
     shellAirMoveAcceleration: 0.14,
     shellGroundFriction: 0.965,
@@ -75,4 +75,9 @@ export const TEMPORARY_SNAIL_CONTROL = {
     shellSlopePassiveMaxSpeed: 3.2,
     shellSlopeInputMaxSpeed: 11,
     contactTolerance: 18,
+    surfaceInputThreshold: 0.25,
+    surfaceContactGraceMs: 90,
+    surfaceSwitchLockMs: 120,
+    surfaceSwitchProjectionMargin: 0.12,
+    surfaceEndProgressTolerance: 0.02,
 } as const;

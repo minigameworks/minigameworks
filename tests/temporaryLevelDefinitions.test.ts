@@ -61,4 +61,130 @@ describe('임시 레벨 정의', () => {
         ).toBeGreaterThanOrEqual(2);
         expect(surfaceObjects.some((object) => object.id === 'pillar-gap-risk-slope')).toBe(true);
     });
+
+    it('플레이필드는 오브젝트 타입과 무관하게 공통 접면 edge를 생성한다', async () => {
+        const level = getTemporaryGimmickCaseLevel(DEFAULT_GIMMICK_CASE_KEY);
+        const { TemporaryPlayfield } = await importTemporaryPlayfield();
+        const playfield = new TemporaryPlayfield({} as never, level);
+        const edges = playfield.getSurfaceEdges();
+
+        expect(edges.some((edge) => edge.id === 'slope-transfer-field-ground-top')).toBe(true);
+        expect(edges.some((edge) => edge.id.startsWith('slope-transfer-entry-slope-top'))).toBe(
+            true,
+        );
+        expect(edges.some((edge) => edge.id === 'slope-transfer-entry-slope-left-side')).toBe(true);
+        expect(edges.every((edge) => edge.start && edge.end && edge.normal)).toBe(true);
+    });
+
+    it('접면 normal 반대편의 내부 위치는 접면 후보로 인식하지 않는다', async () => {
+        const level = getTemporaryGimmickCaseLevel(DEFAULT_GIMMICK_CASE_KEY);
+        const { TemporaryPlayfield } = await importTemporaryPlayfield();
+        const playfield = new TemporaryPlayfield({} as never, level);
+        const edge = playfield
+            .getSurfaceEdges()
+            .find((surfaceEdge) => surfaceEdge.id.startsWith('slope-transfer-entry-slope-top'));
+
+        expect(edge).toBeDefined();
+
+        if (!edge) {
+            return;
+        }
+
+        const insidePosition = {
+            x: (edge.start.x + edge.end.x) / 2 - edge.normal.x * 5,
+            y: (edge.start.y + edge.end.y) / 2 - edge.normal.y * 5,
+        };
+        const surfaces = playfield.getAttachmentSurfaces(
+            insidePosition,
+            {
+                tangentHalfLength: 13,
+                normalHalfDepth: 13,
+            },
+            18,
+        );
+
+        expect(surfaces.some((surface) => surface.edgeId === edge.id)).toBe(false);
+    });
+
+    it('접면 끝점에서 떨어진 위치는 스냅 후보로 인식하지 않는다', async () => {
+        const level = getTemporaryGimmickCaseLevel(DEFAULT_GIMMICK_CASE_KEY);
+        const { TemporaryPlayfield } = await importTemporaryPlayfield();
+        const playfield = new TemporaryPlayfield({} as never, level);
+        const edge = playfield
+            .getSurfaceEdges()
+            .find((surfaceEdge) => surfaceEdge.id.startsWith('slope-transfer-entry-slope-top'));
+
+        expect(edge).toBeDefined();
+
+        if (!edge) {
+            return;
+        }
+
+        const tangent = {
+            x: edge.end.x - edge.start.x,
+            y: edge.end.y - edge.start.y,
+        };
+        const tangentLength = Math.hypot(tangent.x, tangent.y);
+        const normalizedTangent = {
+            x: tangent.x / tangentLength,
+            y: tangent.y / tangentLength,
+        };
+        const detachedPosition = {
+            x: edge.end.x + normalizedTangent.x * 24 + edge.normal.x * 13,
+            y: edge.end.y + normalizedTangent.y * 24 + edge.normal.y * 13,
+        };
+        const surfaces = playfield.getAttachmentSurfaces(
+            detachedPosition,
+            {
+                tangentHalfLength: 26,
+                normalHalfDepth: 13,
+            },
+            18,
+        );
+
+        expect(surfaces.some((surface) => surface.edgeId === edge.id)).toBe(false);
+    });
+
+    it('접면 끝점 바로 근처도 모서리 전환 후보로 인식할 수 있다', async () => {
+        const level = getTemporaryGimmickCaseLevel(DEFAULT_GIMMICK_CASE_KEY);
+        const { TemporaryPlayfield } = await importTemporaryPlayfield();
+        const playfield = new TemporaryPlayfield({} as never, level);
+        const edge = playfield
+            .getSurfaceEdges()
+            .find((surfaceEdge) => surfaceEdge.id === 'slope-transfer-entry-slope-left-side');
+
+        expect(edge).toBeDefined();
+
+        if (!edge) {
+            return;
+        }
+
+        const edgeVector = {
+            x: edge.end.x - edge.start.x,
+            y: edge.end.y - edge.start.y,
+        };
+        const edgeLength = Math.hypot(edgeVector.x, edgeVector.y);
+        const tangent = {
+            x: edgeVector.x / edgeLength,
+            y: edgeVector.y / edgeLength,
+        };
+        const nearEndPosition = {
+            x: edge.end.x - tangent.x * 4 + edge.normal.x * 13,
+            y: edge.end.y - tangent.y * 4 + edge.normal.y * 13,
+        };
+        const surfaces = playfield.getAttachmentSurfaces(
+            nearEndPosition,
+            {
+                tangentHalfLength: 23,
+                normalHalfDepth: 13,
+            },
+            18,
+        );
+
+        expect(surfaces.some((surface) => surface.edgeId === edge.id)).toBe(true);
+    });
 });
+
+const importTemporaryPlayfield = async (): Promise<
+    typeof import('../src/systems/TemporaryPlayfield')
+> => import('../src/systems/TemporaryPlayfield');
