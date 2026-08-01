@@ -41,6 +41,7 @@ export type TemporaryLevelDefinition = {
 };
 
 export const DEFAULT_GIMMICK_CASE_KEY = 'slope-transfer';
+export const PILLAR_GAP_CASE_KEY = 'pillar-gap';
 
 const TEMPORARY_WALL_THICKNESS = 24;
 const MAIN_VERTICAL_LEVEL_HEIGHT = GAME_CANVAS.height * 3;
@@ -193,6 +194,58 @@ export const TEMPORARY_GIMMICK_CASE_LEVELS = {
                 width: 240,
                 height: 22,
                 angle: -16,
+            }),
+        ],
+    },
+    [PILLAR_GAP_CASE_KEY]: {
+        key: PILLAR_GAP_CASE_KEY,
+        name: '기둥과 낭떠러지 케이스',
+        startPosition: {
+            x: 120,
+            y:
+                GAME_CANVAS.height -
+                TEMPORARY_WALL_THICKNESS -
+                TEMPORARY_SNAIL_MARKER.normalSegmentRadius,
+        },
+        objects: [
+            createFieldObject('pillar-gap-field', GAME_CANVAS.height),
+            createSurfaceObject({
+                id: 'pillar-gap-left-pillar',
+                name: '왼쪽 기둥',
+                x: 230,
+                y: fromBottom(GAME_CANVAS.height, 190),
+                width: 110,
+                height: 22,
+                angle: 0,
+                fillMode: 'solid-to-bottom',
+            }),
+            createSurfaceObject({
+                id: 'pillar-gap-right-pillar',
+                name: '오른쪽 기둥',
+                x: 500,
+                y: fromBottom(GAME_CANVAS.height, 165),
+                width: 120,
+                height: 22,
+                angle: 0,
+                fillMode: 'solid-to-bottom',
+            }),
+            createSurfaceObject({
+                id: 'pillar-gap-risk-slope',
+                name: '낭떠러지 진입 경사면',
+                x: 700,
+                y: fromBottom(GAME_CANVAS.height, 240),
+                width: 240,
+                height: 22,
+                angle: -14,
+            }),
+            createSurfaceObject({
+                id: 'pillar-gap-upper-platform',
+                name: '상단 회수 발판',
+                x: GAME_CANVAS.width - TEMPORARY_WALL_THICKNESS - 120,
+                y: fromBottom(GAME_CANVAS.height, 330),
+                width: 220,
+                height: 22,
+                angle: 0,
             }),
         ],
     },
