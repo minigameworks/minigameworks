@@ -5,6 +5,7 @@ import {
     getTemporaryGimmickCaseLevel,
     getTemporaryLevelField,
     getTemporaryLevelSurfaceObjects,
+    PILLAR_GAP_CASE_KEY,
     TEMPORARY_MAIN_LEVEL,
 } from '../src/systems/TemporaryLevelDefinitions';
 
@@ -48,5 +49,16 @@ describe('임시 레벨 정의', () => {
             true,
         );
         expect(caseSurfaceObjects.some((object) => object.fillMode === 'thin')).toBe(true);
+    });
+
+    it('기둥과 낭떠러지 케이스는 하단 채움 기둥과 끊긴 이동 구간을 가진다', () => {
+        const level = getTemporaryGimmickCaseLevel(PILLAR_GAP_CASE_KEY);
+        const surfaceObjects = getTemporaryLevelSurfaceObjects(level);
+
+        expect(level.key).toBe(PILLAR_GAP_CASE_KEY);
+        expect(
+            surfaceObjects.filter((object) => object.fillMode === 'solid-to-bottom').length,
+        ).toBeGreaterThanOrEqual(2);
+        expect(surfaceObjects.some((object) => object.id === 'pillar-gap-risk-slope')).toBe(true);
     });
 });
