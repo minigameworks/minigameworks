@@ -2,23 +2,29 @@ import Phaser from 'phaser';
 import { GAME_CANVAS } from '../config/gameConfig';
 import { SnailPlayer } from '../entities/SnailPlayer';
 import { TemporaryPlayfield } from '../systems/TemporaryPlayfield';
-import { TEMPORARY_MAIN_LEVEL } from '../systems/TemporaryLevelDefinitions';
+import { getTemporaryGimmickCaseLevel } from '../systems/TemporaryLevelDefinitions';
 
-export class GameScene extends Phaser.Scene {
+type PlayableCaseSceneData = {
+    caseKey?: string;
+};
+
+export class PlayableCaseScene extends Phaser.Scene {
     private playfield?: TemporaryPlayfield;
     private player?: SnailPlayer;
     private followedTarget?: Phaser.GameObjects.GameObject;
 
     public constructor() {
-        super('GameScene');
+        super('PlayableCaseScene');
     }
 
-    public create(): void {
-        this.playfield = new TemporaryPlayfield(this, TEMPORARY_MAIN_LEVEL);
+    public create(data: PlayableCaseSceneData): void {
+        const level = getTemporaryGimmickCaseLevel(data.caseKey ?? null);
+
+        this.playfield = new TemporaryPlayfield(this, level);
         this.playfield.create();
 
         this.player = new SnailPlayer(this, this.playfield, this.playfield.getSnailStartPosition());
-        this.configureVerticalWorld();
+        this.configureCaseWorld();
     }
 
     public update(): void {
@@ -26,7 +32,7 @@ export class GameScene extends Phaser.Scene {
         this.syncCameraFollowTarget();
     }
 
-    private configureVerticalWorld(): void {
+    private configureCaseWorld(): void {
         if (!this.playfield || !this.player) {
             return;
         }
@@ -45,7 +51,10 @@ export class GameScene extends Phaser.Scene {
         );
         this.cameras.main.startFollow(this.player.getGameObject(), true, 0.08, 0.08);
         this.followedTarget = this.player.getGameObject();
-        this.cameras.main.setScroll(0, this.playfield.getWorldHeight() - GAME_CANVAS.height);
+        this.cameras.main.setScroll(
+            0,
+            Math.max(0, this.playfield.getWorldHeight() - GAME_CANVAS.height),
+        );
     }
 
     private syncCameraFollowTarget(): void {

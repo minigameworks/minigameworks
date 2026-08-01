@@ -50,6 +50,17 @@ export class SnailInputController {
             return;
         }
 
+        this.scene.input.keyboard.addCapture([
+            Phaser.Input.Keyboard.KeyCodes.LEFT,
+            Phaser.Input.Keyboard.KeyCodes.RIGHT,
+            Phaser.Input.Keyboard.KeyCodes.UP,
+            Phaser.Input.Keyboard.KeyCodes.DOWN,
+            Phaser.Input.Keyboard.KeyCodes.SPACE,
+            Phaser.Input.Keyboard.KeyCodes.A,
+            Phaser.Input.Keyboard.KeyCodes.D,
+            Phaser.Input.Keyboard.KeyCodes.W,
+            Phaser.Input.Keyboard.KeyCodes.S,
+        ]);
         this.cursors = this.scene.input.keyboard.createCursorKeys();
         this.keyA = this.scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.A);
         this.keyD = this.scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D);
