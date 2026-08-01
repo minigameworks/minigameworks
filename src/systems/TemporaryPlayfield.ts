@@ -1,11 +1,6 @@
 import Phaser from 'phaser';
-import {
-    GAME_CANVAS,
-    TEMPORARY_PLATFORMS,
-    TEMPORARY_PLAYFIELD,
-    TEMPORARY_SCENE_COLORS,
-    TEMPORARY_SNAIL_MARKER,
-} from '../config/gameConfig';
+import { GAME_CANVAS, TEMPORARY_SCENE_COLORS } from '../config/gameConfig';
+import { TemporaryLevelDefinition } from './TemporaryLevelDefinitions';
 
 export type AttachmentSurface = {
     normal: Phaser.Types.Math.Vector2Like;
@@ -24,69 +19,50 @@ type AttachmentCandidate = {
 };
 
 export class TemporaryPlayfield {
-    public constructor(private readonly scene: Phaser.Scene) {}
+    public constructor(
+        private readonly scene: Phaser.Scene,
+        private readonly level: TemporaryLevelDefinition,
+    ) {}
 
     public create(): void {
         const graphics = this.scene.add.graphics();
         const fieldX = this.getFieldX();
         const fieldY = this.getFieldY();
-        const centerX = GAME_CANVAS.width / 2;
-        const groundY = this.getGroundTopY() + TEMPORARY_PLAYFIELD.wallThickness / 2;
-        const leftWallX = fieldX + TEMPORARY_PLAYFIELD.wallThickness / 2;
-        const rightWallX =
-            fieldX + TEMPORARY_PLAYFIELD.width - TEMPORARY_PLAYFIELD.wallThickness / 2;
-        const wallCenterY = fieldY + TEMPORARY_PLAYFIELD.height / 2;
+        const world = this.level.world;
+        const centerX = fieldX + world.width / 2;
+        const groundY = this.getGroundTopY() + world.wallThickness / 2;
+        const leftWallX = fieldX + world.wallThickness / 2;
+        const rightWallX = fieldX + world.width - world.wallThickness / 2;
+        const wallCenterY = fieldY + world.height / 2;
 
         graphics.fillStyle(TEMPORARY_SCENE_COLORS.background, 1);
-        graphics.fillRect(0, fieldY, GAME_CANVAS.width, TEMPORARY_PLAYFIELD.height);
+        graphics.fillRect(0, fieldY, GAME_CANVAS.width, world.height);
         graphics.fillStyle(TEMPORARY_SCENE_COLORS.playfield, 1);
-        graphics.fillRect(fieldX, fieldY, TEMPORARY_PLAYFIELD.width, TEMPORARY_PLAYFIELD.height);
+        graphics.fillRect(fieldX, fieldY, world.width, world.height);
         graphics.fillStyle(TEMPORARY_SCENE_COLORS.wall, 1);
+        graphics.fillRect(fieldX, fieldY, world.wallThickness, world.height);
         graphics.fillRect(
-            fieldX,
+            fieldX + world.width - world.wallThickness,
             fieldY,
-            TEMPORARY_PLAYFIELD.wallThickness,
-            TEMPORARY_PLAYFIELD.height,
-        );
-        graphics.fillRect(
-            fieldX + TEMPORARY_PLAYFIELD.width - TEMPORARY_PLAYFIELD.wallThickness,
-            fieldY,
-            TEMPORARY_PLAYFIELD.wallThickness,
-            TEMPORARY_PLAYFIELD.height,
+            world.wallThickness,
+            world.height,
         );
         graphics.fillStyle(TEMPORARY_SCENE_COLORS.ground, 1);
-        graphics.fillRect(
-            fieldX,
-            this.getGroundTopY(),
-            TEMPORARY_PLAYFIELD.width,
-            TEMPORARY_PLAYFIELD.wallThickness,
-        );
+        graphics.fillRect(fieldX, this.getGroundTopY(), world.width, world.wallThickness);
 
-        this.scene.matter.add.rectangle(
-            centerX,
-            groundY,
-            TEMPORARY_PLAYFIELD.width,
-            TEMPORARY_PLAYFIELD.wallThickness,
-            {
-                isStatic: true,
-                label: 'temporary-ground',
-            },
-        );
-        this.scene.matter.add.rectangle(
-            leftWallX,
-            wallCenterY,
-            TEMPORARY_PLAYFIELD.wallThickness,
-            TEMPORARY_PLAYFIELD.height,
-            {
-                isStatic: true,
-                label: 'temporary-left-wall',
-            },
-        );
+        this.scene.matter.add.rectangle(centerX, groundY, world.width, world.wallThickness, {
+            isStatic: true,
+            label: 'temporary-ground',
+        });
+        this.scene.matter.add.rectangle(leftWallX, wallCenterY, world.wallThickness, world.height, {
+            isStatic: true,
+            label: 'temporary-left-wall',
+        });
         this.scene.matter.add.rectangle(
             rightWallX,
             wallCenterY,
-            TEMPORARY_PLAYFIELD.wallThickness,
-            TEMPORARY_PLAYFIELD.height,
+            world.wallThickness,
+            world.height,
             {
                 isStatic: true,
                 label: 'temporary-right-wall',
@@ -99,7 +75,7 @@ export class TemporaryPlayfield {
     private createTemporaryPlatforms(graphics: Phaser.GameObjects.Graphics): void {
         graphics.fillStyle(TEMPORARY_SCENE_COLORS.platform, 1);
 
-        for (const platform of TEMPORARY_PLATFORMS) {
+        for (const platform of this.level.platforms) {
             graphics.save();
             graphics.translateCanvas(platform.x, platform.y);
             graphics.rotateCanvas(Phaser.Math.DegToRad(platform.angle));
@@ -126,14 +102,19 @@ export class TemporaryPlayfield {
     }
 
     public getSnailStartPosition(): Phaser.Types.Math.Vector2Like {
-        return {
-            x: GAME_CANVAS.width / 2,
-            y: this.getGroundTopY() - TEMPORARY_SNAIL_MARKER.normalSegmentRadius,
-        };
+        return this.level.startPosition;
+    }
+
+    public getWorldWidth(): number {
+        return this.level.world.width;
+    }
+
+    public getWorldHeight(): number {
+        return this.level.world.height;
     }
 
     public getGroundTopY(): number {
-        return this.getFieldY() + TEMPORARY_PLAYFIELD.height - TEMPORARY_PLAYFIELD.wallThickness;
+        return this.getFieldY() + this.level.world.height - this.level.world.wallThickness;
     }
 
     public getAttachmentSurface(
@@ -199,9 +180,8 @@ export class TemporaryPlayfield {
     ): AttachmentCandidate[] {
         const candidates: AttachmentCandidate[] = [];
         const fieldX = this.getFieldX();
-        const leftWallRightX = fieldX + TEMPORARY_PLAYFIELD.wallThickness;
-        const rightWallLeftX =
-            fieldX + TEMPORARY_PLAYFIELD.width - TEMPORARY_PLAYFIELD.wallThickness;
+        const leftWallRightX = fieldX + this.level.world.wallThickness;
+        const rightWallLeftX = fieldX + this.level.world.width - this.level.world.wallThickness;
 
         this.addAttachmentCandidate(
             candidates,
@@ -234,7 +214,7 @@ export class TemporaryPlayfield {
     ): AttachmentCandidate[] {
         const candidates: AttachmentCandidate[] = [];
 
-        for (const platform of TEMPORARY_PLATFORMS) {
+        for (const platform of this.level.platforms) {
             const angle = Phaser.Math.DegToRad(platform.angle);
             const localPosition = this.toLocalPlatformPoint(
                 position,
@@ -394,10 +374,10 @@ export class TemporaryPlayfield {
     }
 
     private getFieldX(): number {
-        return (GAME_CANVAS.width - TEMPORARY_PLAYFIELD.width) / 2;
+        return (GAME_CANVAS.width - this.level.world.width) / 2;
     }
 
     private getFieldY(): number {
-        return (GAME_CANVAS.height - TEMPORARY_PLAYFIELD.height) / 2;
+        return 0;
     }
 }

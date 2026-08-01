@@ -8,7 +8,7 @@
 
 ### 결정
 
-현재 필드는 `TemporaryPlayfield`와 `TEMPORARY_PLATFORMS`로 구성한 임시 플레이필드로 유지한다. 접면 판정은 `AttachmentSurface`와 `AttachmentProbe`로 분리해 일반 상태의 접면 부착과 껍질 상태의 지지면 판정을 구분한다.
+현재 필드는 `TemporaryPlayfield`와 `TemporaryLevelDefinition`으로 구성한 임시 플레이필드로 유지한다. 접면 판정은 `AttachmentSurface`와 `AttachmentProbe`로 분리해 일반 상태의 접면 부착과 껍질 상태의 지지면 판정을 구분한다.
 
 ### 이유
 
@@ -17,6 +17,26 @@
 ### 영향
 
 후속 레벨 작업에서는 임시 필드 요소를 그대로 확장하지 않는다. 바닥, 벽, 발판, 경사면, 기믹, 시작점, 목표 지점, 체크포인트를 별도 레벨 요소로 분리하고 `TemporaryPlayfield` 역할을 실제 레벨 로더와 접면 해석 시스템으로 대체한다.
+
+## 2026-08-01: 기믹 케이스 씬을 메인 수직 레벨과 분리
+
+### 배경
+
+세로 맵은 위쪽으로 계속 확장되어야 한다. 특정 기믹을 테스트할 때마다 플레이어가 메인 맵 하단부터 해당 위치까지 이동하면 검증 속도가 떨어진다.
+
+### 결정
+
+메인 수직 레벨과 별도로 `PlayableCaseScene`을 둔다. 기믹 패턴은 먼저 `TemporaryLevelDefinitions.ts`의 케이스 레벨로 정의하고, URL 쿼리 `case`를 통해 바로 실행한다.
+
+케이스 목록과 검증 상태는 `notes/gimmick-cases.md`에서 관리한다.
+
+### 이유
+
+기믹을 작은 플레이어블 케이스에서 먼저 검증하면 이동 시간 없이 조작감과 물리 반응을 반복 확인할 수 있다. 검증된 케이스 구간은 이후 메인 수직 레벨 상단에 붙이는 방식으로 확장한다.
+
+### 영향
+
+`BootScene`은 `case` 쿼리 유무에 따라 `GameScene` 또는 `PlayableCaseScene`으로 분기한다. 후속 작업에서 스프링, 범퍼, 위험 지형 같은 기믹도 동일한 케이스 레벨 흐름으로 먼저 검증한다.
 
 ## 2026-07-30: Phaser 3와 Matter Physics 통합 사용
 
