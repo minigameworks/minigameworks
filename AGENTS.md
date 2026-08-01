@@ -129,10 +129,13 @@ GitHub 작업은 웹 UI보다 `gh`를 우선 사용한다.
 Issue를 만들 때는 다음 정보를 함께 설정한다.
 
 - 할당자: 기본적으로 `@me`를 지정한다.
-- 타입: GitHub CLI에서 네이티브 Issue Type 설정을 지원하지 않으면 본문에 `## 타입` 항목으로 작성한다.
-- 기간: 사용자가 지정한 기간을 본문에 `## 기간` 항목으로 작성한다.
+- 타입: GitHub Issue Type을 사용한다. 기능 작업은 기본적으로 `Feature`를 지정한다.
+- 기간: GitHub Issue Fields의 `Start date`와 `Target date`를 사용한다.
+- 우선순위와 작업량: GitHub Issue Fields의 `Priority`와 `Effort`를 사용한다.
 
-사용자가 별도 기간을 지정하지 않고 오늘 작업으로 요청하면 시작일과 종료일을 모두 오늘 날짜로 작성한다.
+사용자가 별도 기간을 지정하지 않고 오늘 작업으로 요청하면 `Start date`와 `Target date`를 모두 오늘 날짜로 설정한다. 사용자가 우선순위나 작업량을 지정하지 않으면 작업 성격에 맞게 보수적으로 설정한다.
+
+Issue Type과 Issue Fields는 본문에 `## 타입`, `## 기간` 같은 섹션으로 중복 작성하지 않는다. `gh issue create`가 해당 필드를 직접 지원하지 않으면 `gh api`로 이슈 생성 후 메타 필드를 갱신한다.
 
 Issue 본문은 반드시 실제 줄바꿈이 들어간 Markdown 파일을 `--body-file`로 전달한다. `--body` 인자에 `\n` 문자열을 직접 넣어 Markdown 줄바꿈이 깨지게 만들지 않는다.
 
