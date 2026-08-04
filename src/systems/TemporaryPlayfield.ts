@@ -6,6 +6,8 @@ import {
     TemporaryFieldObjectDefinition,
     TemporaryLevelDefinition,
     TemporarySurfaceObjectDefinition,
+    TemporarySurfaceMaterial,
+    TemporarySurfaceMaterialSection,
 } from './TemporaryLevelDefinitions';
 
 export type AttachmentSurface = {
@@ -17,6 +19,7 @@ export type AttachmentSurface = {
     snapPosition: Phaser.Types.Math.Vector2Like;
     progress: number;
     length: number;
+    material: TemporarySurfaceMaterial;
 };
 
 export type AttachmentProbe = {
@@ -34,6 +37,8 @@ export type SurfaceEdge = {
     start: Phaser.Types.Math.Vector2Like;
     end: Phaser.Types.Math.Vector2Like;
     normal: Phaser.Types.Math.Vector2Like;
+    material: TemporarySurfaceMaterial;
+    materialSections: TemporarySurfaceMaterialSection[];
 };
 
 type SolidSurfacePolygon = [
@@ -117,9 +122,9 @@ export class TemporaryPlayfield {
     }
 
     private createTemporaryPlatforms(graphics: Phaser.GameObjects.Graphics): void {
-        graphics.fillStyle(TEMPORARY_SCENE_COLORS.platform, 1);
-
         for (const platform of this.surfaceObjects) {
+            graphics.fillStyle(this.getSurfaceMaterialColor(platform.material), 1);
+
             if (platform.fillMode === 'solid-to-bottom') {
                 this.createSolidSurfaceObject(graphics, platform);
             } else {
@@ -142,6 +147,11 @@ export class TemporaryPlayfield {
             platform.height,
         );
         graphics.restore();
+        this.drawSurfaceMaterialSections(graphics, platform);
+
+        if (this.isBoundaryWallMaterialMarker(platform)) {
+            return;
+        }
 
         this.createThinSurfaceBody(platform);
     }
@@ -161,6 +171,7 @@ export class TemporaryPlayfield {
         const polygon = this.getSolidSurfacePolygon(platform);
 
         graphics.fillPoints(polygon, true);
+        this.drawSurfaceMaterialSections(graphics, platform);
         this.createThinSurfaceBody(platform);
         this.createSolidSurfaceFillBodies(platform, polygon);
     }
@@ -266,6 +277,8 @@ export class TemporaryPlayfield {
         const groundTopY = this.getGroundTopY();
         const leftWallRightX = fieldX + this.field.wallThickness;
         const rightWallLeftX = fieldX + this.field.width - this.field.wallThickness;
+        const leftWallMaterialSections = this.createBoundaryWallMaterialSections(leftWallRightX);
+        const rightWallMaterialSections = this.createBoundaryWallMaterialSections(rightWallLeftX);
 
         return [
             {
@@ -273,23 +286,125 @@ export class TemporaryPlayfield {
                 start: { x: leftWallRightX, y: groundTopY },
                 end: { x: rightWallLeftX, y: groundTopY },
                 normal: { x: 0, y: -1 },
+                material: 'default',
+                materialSections: [],
             },
             {
                 id: `${this.field.id}-left-wall-inner`,
                 start: { x: leftWallRightX, y: groundTopY },
                 end: { x: leftWallRightX, y: this.getFieldY() },
                 normal: { x: 1, y: 0 },
+                material: 'default',
+                materialSections: leftWallMaterialSections,
             },
             {
                 id: `${this.field.id}-right-wall-inner`,
                 start: { x: rightWallLeftX, y: groundTopY },
                 end: { x: rightWallLeftX, y: this.getFieldY() },
                 normal: { x: -1, y: 0 },
+                material: 'default',
+                materialSections: rightWallMaterialSections,
             },
         ];
     }
 
+    private createBoundaryWallMaterialSections(wallX: number): TemporarySurfaceMaterialSection[] {
+        const fieldTopY = this.getFieldY();
+        const groundTopY = this.getGroundTopY();
+        const wallLength = groundTopY - fieldTopY;
+
+        if (wallLength <= 0) {
+            return [];
+        }
+
+        return this.surfaceObjects.flatMap((platform) => {
+            if (!this.isBoundaryWallMaterialObject(platform, wallX)) {
+                return [];
+            }
+
+            const objectStartRatio = this.clamp(
+                (groundTopY - (platform.y + platform.width / 2)) / wallLength,
+                0,
+                1,
+            );
+            const objectEndRatio = this.clamp(
+                (groundTopY - (platform.y - platform.width / 2)) / wallLength,
+                0,
+                1,
+            );
+            const startRatio = Math.min(objectStartRatio, objectEndRatio);
+            const endRatio = Math.max(objectStartRatio, objectEndRatio);
+
+            if (endRatio <= startRatio) {
+                return [];
+            }
+
+            const sections =
+                platform.surfaceSections.length > 0
+                    ? platform.surfaceSections
+                    : [
+                          {
+                              id: `${platform.id}-boundary-section`,
+                              name: platform.name,
+                              startRatio: 0,
+                              endRatio: 1,
+                              material: platform.material,
+                          },
+                      ];
+
+            return sections
+                .filter((section) => section.material !== 'default')
+                .map((section) => {
+                    const localStartRatio = Math.min(section.startRatio, section.endRatio);
+                    const localEndRatio = Math.max(section.startRatio, section.endRatio);
+                    const sectionLength = endRatio - startRatio;
+
+                    return {
+                        ...section,
+                        id: `${section.id}-boundary`,
+                        startRatio: startRatio + sectionLength * this.clamp(localStartRatio, 0, 1),
+                        endRatio: startRatio + sectionLength * this.clamp(localEndRatio, 0, 1),
+                    };
+                });
+        });
+    }
+
+    private isBoundaryWallMaterialObject(
+        platform: TemporarySurfaceObjectDefinition,
+        wallX: number,
+    ): boolean {
+        const hasMaterialOverride =
+            platform.material !== 'default' ||
+            platform.surfaceSections.some((section) => section.material !== 'default');
+
+        if (!hasMaterialOverride) {
+            return false;
+        }
+
+        const angle = this.degToRad(platform.angle);
+        const isVertical = Math.abs(Math.abs(Math.sin(angle)) - 1) < 0.001;
+        const overlapsWallX =
+            Math.abs(platform.x - wallX) <= Math.max(platform.height, this.field.wallThickness);
+
+        return isVertical && overlapsWallX;
+    }
+
+    private isBoundaryWallMaterialMarker(platform: TemporarySurfaceObjectDefinition): boolean {
+        const fieldX = this.getFieldX();
+        const leftWallRightX = fieldX + this.field.wallThickness;
+        const rightWallLeftX = fieldX + this.field.width - this.field.wallThickness;
+
+        return (
+            this.isBoundaryWallMaterialObject(platform, leftWallRightX) ||
+            this.isBoundaryWallMaterialObject(platform, rightWallLeftX)
+        );
+    }
+
     private createObjectSurfaceEdges(platform: TemporarySurfaceObjectDefinition): SurfaceEdge[] {
+        if (this.isBoundaryWallMaterialMarker(platform)) {
+            return [];
+        }
+
         if (platform.fillMode === 'solid-to-bottom') {
             const [topLeft, topRight, bottomRight, bottomLeft] =
                 this.getSolidSurfacePolygon(platform);
@@ -302,12 +417,16 @@ export class TemporaryPlayfield {
                     start: bottomLeft,
                     end: topLeft,
                     normal: { x: -1, y: 0 },
+                    material: platform.material,
+                    materialSections: [],
                 },
                 {
                     id: `${platform.id}-right-side`,
                     start: topRight,
                     end: bottomRight,
                     normal: { x: 1, y: 0 },
+                    material: platform.material,
+                    materialSections: [],
                 },
             ];
         }
@@ -329,6 +448,8 @@ export class TemporaryPlayfield {
                     x: -corners.topNormal.x,
                     y: -corners.topNormal.y,
                 },
+                material: platform.material,
+                materialSections: [],
             },
             {
                 id: `${platform.id}-left-side`,
@@ -338,12 +459,16 @@ export class TemporaryPlayfield {
                     x: -corners.topTangent.x,
                     y: -corners.topTangent.y,
                 },
+                material: platform.material,
+                materialSections: [],
             },
             {
                 id: `${platform.id}-right-side`,
                 start: corners.topRight,
                 end: corners.bottomRight,
                 normal: corners.topTangent,
+                material: platform.material,
+                materialSections: [],
             },
         ];
     }
@@ -360,6 +485,8 @@ export class TemporaryPlayfield {
                 start: topLeft,
                 end: topRight,
                 normal,
+                material: platform.material,
+                materialSections: platform.surfaceSections,
             },
         ];
     }
@@ -479,6 +606,7 @@ export class TemporaryPlayfield {
         }
 
         const clampedTangentDistance = this.clamp(tangentDistance, 0, edgeLength);
+        const progress = clampedTangentDistance / edgeLength;
         const distance = Math.abs(normalDistance - probe.normalHalfDepth);
 
         if (distance > tolerance) {
@@ -508,10 +636,59 @@ export class TemporaryPlayfield {
                 normal: edge.normal,
                 tangent,
                 snapPosition,
-                progress: clampedTangentDistance / edgeLength,
+                progress,
                 length: edgeLength,
+                material: this.getSurfaceEdgeMaterialAtProgress(edge, progress),
             },
         });
+    }
+
+    private drawSurfaceMaterialSections(
+        graphics: Phaser.GameObjects.Graphics,
+        platform: TemporarySurfaceObjectDefinition,
+    ): void {
+        for (const section of platform.surfaceSections) {
+            if (section.material === platform.material) {
+                continue;
+            }
+
+            const startRatio = this.clamp(section.startRatio, 0, 1);
+            const endRatio = this.clamp(section.endRatio, 0, 1);
+            const startX = -platform.width / 2 + Math.min(startRatio, endRatio) * platform.width;
+            const endX = -platform.width / 2 + Math.max(startRatio, endRatio) * platform.width;
+            const width = endX - startX;
+
+            if (width <= 0) {
+                continue;
+            }
+
+            graphics.save();
+            graphics.fillStyle(this.getSurfaceMaterialColor(section.material), 1);
+            graphics.translateCanvas(platform.x, platform.y);
+            graphics.rotateCanvas(this.degToRad(platform.angle));
+            graphics.fillRect(startX, -platform.height / 2, width, platform.height);
+            graphics.restore();
+        }
+    }
+
+    private getSurfaceEdgeMaterialAtProgress(
+        edge: SurfaceEdge,
+        progress: number,
+    ): TemporarySurfaceMaterial {
+        const section = edge.materialSections.find((currentSection) => {
+            const startRatio = Math.min(currentSection.startRatio, currentSection.endRatio);
+            const endRatio = Math.max(currentSection.startRatio, currentSection.endRatio);
+
+            return progress >= startRatio && progress <= endRatio;
+        });
+
+        return section?.material ?? edge.material;
+    }
+
+    private getSurfaceMaterialColor(material: TemporarySurfaceMaterial): number {
+        return material === 'slippery'
+            ? TEMPORARY_SCENE_COLORS.slipperyPlatform
+            : TEMPORARY_SCENE_COLORS.platform;
     }
 
     private rotateVector(

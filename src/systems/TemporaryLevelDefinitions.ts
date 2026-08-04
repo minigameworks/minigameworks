@@ -3,6 +3,15 @@ import { GAME_CANVAS, TEMPORARY_SNAIL_MARKER } from '../config/gameConstants';
 export type TemporaryGimmickObjectKind = 'field' | 'platform' | 'slope';
 
 export type TemporarySurfaceFillMode = 'thin' | 'solid-to-bottom';
+export type TemporarySurfaceMaterial = 'default' | 'slippery';
+
+export type TemporarySurfaceMaterialSection = {
+    id: string;
+    name: string;
+    startRatio: number;
+    endRatio: number;
+    material: TemporarySurfaceMaterial;
+};
 
 type TemporaryBaseObjectDefinition = {
     id: string;
@@ -25,6 +34,8 @@ export type TemporarySurfaceObjectDefinition = TemporaryBaseObjectDefinition & {
     height: number;
     angle: number;
     fillMode: TemporarySurfaceFillMode;
+    material: TemporarySurfaceMaterial;
+    surfaceSections: TemporarySurfaceMaterialSection[];
 };
 
 export type TemporaryGimmickObjectDefinition =
@@ -42,6 +53,7 @@ export type TemporaryLevelDefinition = {
 
 export const DEFAULT_GIMMICK_CASE_KEY = 'slope-transfer';
 export const PILLAR_GAP_CASE_KEY = 'pillar-gap';
+export const SLIPPERY_SLOPE_CASE_KEY = 'slippery-slope';
 
 const TEMPORARY_WALL_THICKNESS = 24;
 const MAIN_VERTICAL_LEVEL_HEIGHT = GAME_CANVAS.height * 3;
@@ -63,12 +75,19 @@ const createFieldObject = (id: string, height: number): TemporaryFieldObjectDefi
 });
 
 const createSurfaceObject = (
-    options: Omit<TemporarySurfaceObjectDefinition, 'kind' | 'fillMode'> &
-        Partial<Pick<TemporarySurfaceObjectDefinition, 'fillMode'>>,
+    options: Omit<
+        TemporarySurfaceObjectDefinition,
+        'kind' | 'fillMode' | 'material' | 'surfaceSections'
+    > &
+        Partial<
+            Pick<TemporarySurfaceObjectDefinition, 'fillMode' | 'material' | 'surfaceSections'>
+        >,
 ): TemporarySurfaceObjectDefinition => ({
     ...options,
     kind: options.angle === 0 ? 'platform' : 'slope',
     fillMode: options.fillMode ?? 'thin',
+    material: options.material ?? 'default',
+    surfaceSections: options.surfaceSections ?? [],
 });
 
 export const getTemporaryLevelField = (
@@ -246,6 +265,77 @@ export const TEMPORARY_GIMMICK_CASE_LEVELS = {
                 width: 220,
                 height: 22,
                 angle: 0,
+            }),
+        ],
+    },
+    [SLIPPERY_SLOPE_CASE_KEY]: {
+        key: SLIPPERY_SLOPE_CASE_KEY,
+        name: 'ㄱ자 미끄럼 표면 케이스',
+        startPosition: {
+            x: 300,
+            y:
+                GAME_CANVAS.height -
+                TEMPORARY_WALL_THICKNESS -
+                TEMPORARY_SNAIL_MARKER.normalSegmentRadius,
+        },
+        objects: [
+            createFieldObject('slippery-slope-field', GAME_CANVAS.height),
+            createSurfaceObject({
+                id: 'slippery-slope-left-wall-field',
+                name: '왼쪽 벽 미끄럼 필드',
+                x: TEMPORARY_WALL_THICKNESS - 7,
+                y: fromBottom(GAME_CANVAS.height, 255),
+                width: 260,
+                height: 14,
+                angle: 90,
+                material: 'slippery',
+            }),
+            createSurfaceObject({
+                id: 'slippery-slope-right-wall-field',
+                name: '오른쪽 벽 미끄럼 필드',
+                x: GAME_CANVAS.width - TEMPORARY_WALL_THICKNESS + 7,
+                y: fromBottom(GAME_CANVAS.height, 255),
+                width: 260,
+                height: 14,
+                angle: -90,
+                material: 'slippery',
+            }),
+            createSurfaceObject({
+                id: 'slippery-slope-l-overhang',
+                name: 'ㄱ자 거꾸로 접면',
+                x: GAME_CANVAS.width / 2,
+                y: fromBottom(GAME_CANVAS.height, 240),
+                width: 240,
+                height: 22,
+                angle: 180,
+                surfaceSections: [
+                    {
+                        id: 'slippery-slope-l-overhang-center-ice',
+                        name: 'ㄱ자 거꾸로 접면 중앙 미끄럼 구간',
+                        startRatio: 0.42,
+                        endRatio: 0.58,
+                        material: 'slippery',
+                    },
+                ],
+            }),
+            createSurfaceObject({
+                id: 'slippery-slope-left-wall-small-slope',
+                name: '왼쪽 벽 바닥 연결 작은 경사면',
+                x: TEMPORARY_WALL_THICKNESS + 50,
+                y: fromBottom(GAME_CANVAS.height, 40),
+                width: 100,
+                height: 18,
+                angle: 18,
+                fillMode: 'solid-to-bottom',
+            }),
+            createSurfaceObject({
+                id: 'slippery-slope-l-vertical',
+                name: 'ㄱ자 오른쪽 세로 벽',
+                x: GAME_CANVAS.width / 2 + 120,
+                y: fromBottom(GAME_CANVAS.height, 140),
+                width: 240,
+                height: 22,
+                angle: -90,
             }),
         ],
     },
