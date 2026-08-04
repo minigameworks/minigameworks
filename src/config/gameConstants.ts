@@ -27,6 +27,7 @@ export const TEMPORARY_SCENE_COLORS = {
     wall: 0x354f52,
     ground: 0x84a98c,
     platform: 0xcce3de,
+    slipperyPlatform: 0x9bf6ff,
 } as const;
 
 // 달팽이 캐릭터가 구현되기 전까지 사용하는 임시 마커 설정이다.
@@ -80,4 +81,7 @@ export const TEMPORARY_SNAIL_CONTROL = {
     surfaceSwitchLockMs: 120,
     surfaceSwitchProjectionMargin: 0.12,
     surfaceEndProgressTolerance: 0.02,
+    slipperyKnockbackSpeed: 2.4,
+    slipperyKnockbackFallSpeed: 2.2,
+    slipperyKnockbackCooldownMs: 180,
 } as const;

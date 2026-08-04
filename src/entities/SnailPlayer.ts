@@ -39,6 +39,7 @@ export class SnailPlayer {
     private normalAttachLockedUntil = 0;
     private normalSurfaceContactGraceUntil = 0;
     private normalSurfaceSwitchLockedUntil = 0;
+    private slipperyKnockbackLockedUntil = 0;
 
     public constructor(
         private readonly scene: Phaser.Scene,
@@ -195,6 +196,11 @@ export class SnailPlayer {
         const moveDirection = this.getTemporaryMoveDirection();
         const climbDirection = this.getTemporaryClimbDirection();
         const recognizedSurfaces = this.recognizedAttachmentSurfaces;
+
+        if (this.applyTemporarySlipperySurfaceKnockback(recognizedSurfaces)) {
+            return;
+        }
+
         const attachmentSurface = this.isTemporaryNormalAttachLocked()
             ? undefined
             : this.selectTemporaryNormalAttachmentSurface(
@@ -372,13 +378,17 @@ export class SnailPlayer {
             return undefined;
         }
 
-        const currentSurface = surfaces.find((surface) =>
-            this.isSameTemporarySurface(surface, this.normalAttachmentSurface),
+        const attachableSurfaces = surfaces.filter((surface) =>
+            this.isTemporaryNormalAttachableSurface(surface),
         );
 
-        if (currentSurface && this.isTemporaryNormalSurfaceSwitchLocked()) {
-            return currentSurface;
+        if (attachableSurfaces.length === 0) {
+            return undefined;
         }
+
+        const currentSurface = attachableSurfaces.find((surface) =>
+            this.isSameTemporarySurface(surface, this.normalAttachmentSurface),
+        );
 
         const stableCurrentSurface =
             currentSurface &&
@@ -390,22 +400,27 @@ export class SnailPlayer {
                 ? currentSurface
                 : undefined;
 
+        if (stableCurrentSurface && this.isTemporaryNormalSurfaceSwitchLocked()) {
+            return stableCurrentSurface;
+        }
+
         const inputSurface = this.getTemporaryInputAttachmentSurface(
-            surfaces,
+            attachableSurfaces,
             moveDirection,
             climbDirection,
             stableCurrentSurface,
+            currentSurface,
         );
 
         if (inputSurface) {
             return inputSurface;
         }
 
-        if (currentSurface) {
-            return currentSurface;
+        if (stableCurrentSurface) {
+            return stableCurrentSurface;
         }
 
-        return surfaces.find((surface) => this.isTemporarySurfaceAgainstGravity(surface));
+        return attachableSurfaces.find((surface) => this.isTemporarySurfaceAgainstGravity(surface));
     }
 
     private getTemporaryRecognizedAttachmentSurfaces(): AttachmentSurface[] {
@@ -424,11 +439,45 @@ export class SnailPlayer {
         return this.recognizedAttachmentSurfaces;
     }
 
+    private applyTemporarySlipperySurfaceKnockback(surfaces: AttachmentSurface[]): boolean {
+        if (!this.snailMarker || this.scene.time.now < this.slipperyKnockbackLockedUntil) {
+            return false;
+        }
+
+        const slipperySurface = surfaces.find(
+            (surface) => !this.isTemporaryNormalAttachableSurface(surface),
+        );
+
+        if (!slipperySurface) {
+            return false;
+        }
+
+        const velocity = this.snailMarker.getVelocity();
+        const nextVelocityX =
+            slipperySurface.normal.x * TEMPORARY_SNAIL_CONTROL.slipperyKnockbackSpeed;
+        const nextVelocityY = Math.max(
+            velocity.y,
+            slipperySurface.normal.y * TEMPORARY_SNAIL_CONTROL.slipperyKnockbackSpeed,
+            TEMPORARY_SNAIL_CONTROL.slipperyKnockbackFallSpeed,
+        );
+
+        this.snailMarker.setIgnoreGravity(false);
+        this.normalAttachmentSurface = undefined;
+        this.normalAttachLockedUntil =
+            this.scene.time.now + TEMPORARY_SNAIL_CONTROL.slipperyKnockbackCooldownMs;
+        this.slipperyKnockbackLockedUntil =
+            this.scene.time.now + TEMPORARY_SNAIL_CONTROL.slipperyKnockbackCooldownMs;
+        this.snailMarker.setVelocity(nextVelocityX, nextVelocityY);
+
+        return true;
+    }
+
     private getTemporaryInputAttachmentSurface(
         surfaces: AttachmentSurface[],
         moveDirection: number,
         climbDirection: number,
         stableCurrentSurface?: AttachmentSurface,
+        currentSurface?: AttachmentSurface,
     ): AttachmentSurface | undefined {
         const input = this.getTemporaryWorldInputVector(moveDirection, climbDirection);
 
@@ -448,6 +497,7 @@ export class SnailPlayer {
             )
             .filter(
                 (candidate) =>
+                    !this.isSameTemporarySurface(candidate.surface, currentSurface) ||
                     !this.isTemporaryProjectionPushingPastSurfaceEnd(
                         candidate.surface,
                         candidate.projection,
@@ -514,6 +564,10 @@ export class SnailPlayer {
         }
 
         return surface.edgeId === target.edgeId;
+    }
+
+    private isTemporaryNormalAttachableSurface(surface: AttachmentSurface): boolean {
+        return surface.material !== 'slippery';
     }
 
     private lockTemporaryNormalSurfaceSwitch(
@@ -988,6 +1042,7 @@ export class SnailPlayer {
             `back:   ${this.formatTemporaryVector(backDirection)}`,
             `selected: ${surface?.edgeId ?? 'none'}`,
             `selected normal: ${this.formatTemporaryVector(surfaceNormal)}`,
+            `selected material: ${surface?.material ?? 'none'}`,
             `recognized: ${this.recognizedAttachmentSurfaces.length}`,
         ];
 
@@ -996,6 +1051,7 @@ export class SnailPlayer {
                 `recognized ${index + 1}: ${recognizedSurface.edgeId}`,
                 `  normal: ${this.formatTemporaryVector(recognizedSurface.normal)}`,
                 `  tangent: ${this.formatTemporaryVector(recognizedSurface.tangent)}`,
+                `  material: ${recognizedSurface.material}`,
             );
         });
 
