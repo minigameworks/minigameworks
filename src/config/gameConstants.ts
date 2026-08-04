@@ -7,21 +7,21 @@ export const GAME_CANVAS = {
 // Phaser가 생성한 canvas를 붙일 HTML 엘리먼트 id다.
 export const GAME_PARENT_ID = 'app';
 
-// 게임 배경색이다. 현재는 초기 화면 확인용 임시 색상이며 최종 그래픽 톤이 아니다.
+// 게임 배경색이다. 현재는 초기 화면 확인용 색상이며 최종 그래픽 톤이 아니다.
 export const GAME_BACKGROUND_COLOR = '#14213d';
 
-// Matter Physics 전역 설정이다. 중력은 초기 확인용 임시값이며 최종 물리 수치가 아니다.
+// Matter Physics 전역 설정이다. 중력은 초기 확인용 값이며 최종 물리 수치가 아니다.
 export const MATTER_CONFIG = {
     gravity: {
         x: 0,
         y: 0.8,
     },
-    // 숨긴 임시 물리 바디가 화면에 노출되지 않도록 디버그 표시는 기본 비활성화한다.
+    // 숨긴 물리 바디가 화면에 노출되지 않도록 디버그 표시는 기본 비활성화한다.
     debug: false,
 } as const;
 
-// 임시 플레이 공간과 배경을 구분하기 위한 색상이다. 최종 아트 스타일이 아니다.
-export const TEMPORARY_SCENE_COLORS = {
+// 플레이 공간과 배경을 구분하기 위한 색상이다. 최종 아트 스타일이 아니다.
+export const SCENE_COLORS = {
     background: 0x2f3e46,
     playfield: 0x52796f,
     wall: 0x354f52,
@@ -30,8 +30,8 @@ export const TEMPORARY_SCENE_COLORS = {
     slipperyPlatform: 0x9bf6ff,
 } as const;
 
-// 달팽이 캐릭터가 구현되기 전까지 사용하는 임시 마커 설정이다.
-export const TEMPORARY_SNAIL_MARKER = {
+// 달팽이 캐릭터 표시와 물리 기준 설정이다.
+export const SNAIL_MARKER = {
     normalSize: 44,
     normalSegmentRadius: 13,
     normalSegmentSpacing: 20,
@@ -56,12 +56,14 @@ export const TEMPORARY_SNAIL_MARKER = {
     surfaceRotationLerp: 0.22,
 } as const;
 
-// 임시 달팽이 조작 설정이다. 최종 이동 속도와 조작감은 별도 게임플레이 튜닝에서 결정한다.
-export const TEMPORARY_SNAIL_CONTROL = {
+// 달팽이 조작 설정이다. 최종 이동 속도와 조작감은 별도 게임플레이 튜닝에서 결정한다.
+export const SNAIL_CONTROL = {
     normalMoveSpeed: 1.4,
     normalClimbSpeed: 1.2,
     normalClimbDownSpeed: 1.4,
     normalAttachMoveSpeed: 1.4,
+    normalSlopeClimbMaxSpeed: 2.8,
+    normalSlopeClimbMaxVerticalSpeed: 1.8,
     normalPassiveSlideSpeed: 0.35,
     shellMoveAcceleration: 0.42,
     shellAirMoveAcceleration: 0.14,
@@ -69,7 +71,7 @@ export const TEMPORARY_SNAIL_CONTROL = {
     shellAirFriction: 0.99,
     shellMaxHorizontalSpeed: 7,
     shellJumpVelocity: -4.8,
-    temporaryShortHopFallAcceleration: 0.55,
+    shortHopFallAcceleration: 0.55,
     modeSwitchAttachCooldownMs: 180,
     shellSlopePassiveAcceleration: 0.08,
     shellSlopeInputAcceleration: 1.25,
@@ -81,6 +83,7 @@ export const TEMPORARY_SNAIL_CONTROL = {
     surfaceSwitchLockMs: 120,
     surfaceSwitchProjectionMargin: 0.12,
     surfaceEndProgressTolerance: 0.02,
+    surfaceConnectionTolerance: 6,
     slipperyKnockbackSpeed: 2.4,
     slipperyKnockbackFallSpeed: 2.2,
     slipperyKnockbackCooldownMs: 180,

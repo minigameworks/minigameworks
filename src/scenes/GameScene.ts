@@ -1,11 +1,16 @@
 import Phaser from 'phaser';
 import { GAME_CANVAS } from '../config/gameConfig';
 import { SnailPlayer } from '../entities/SnailPlayer';
-import { TemporaryPlayfield } from '../systems/TemporaryPlayfield';
-import { TEMPORARY_MAIN_LEVEL } from '../systems/TemporaryLevelDefinitions';
+import {
+    createLevelFromTiledMap,
+    INITIAL_VERTICAL_MAP_KEY,
+    INITIAL_VERTICAL_MAP_PATH,
+} from '../systems/TiledLevelLoader';
+import type { TiledLevelMap } from '../systems/TiledLevelLoader';
+import { Playfield } from '../systems/Playfield';
 
 export class GameScene extends Phaser.Scene {
-    private playfield?: TemporaryPlayfield;
+    private playfield?: Playfield;
     private player?: SnailPlayer;
     private followedTarget?: Phaser.GameObjects.GameObject;
 
@@ -13,8 +18,15 @@ export class GameScene extends Phaser.Scene {
         super('GameScene');
     }
 
+    public preload(): void {
+        this.load.json(INITIAL_VERTICAL_MAP_KEY, INITIAL_VERTICAL_MAP_PATH);
+    }
+
     public create(): void {
-        this.playfield = new TemporaryPlayfield(this, TEMPORARY_MAIN_LEVEL);
+        const map = this.cache.json.get(INITIAL_VERTICAL_MAP_KEY) as TiledLevelMap;
+        const level = createLevelFromTiledMap(map);
+
+        this.playfield = new Playfield(this, level);
         this.playfield.create();
 
         this.player = new SnailPlayer(this, this.playfield, this.playfield.getSnailStartPosition());

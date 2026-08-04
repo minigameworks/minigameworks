@@ -1,15 +1,15 @@
 import Phaser from 'phaser';
 import { GAME_CANVAS } from '../config/gameConfig';
 import { SnailPlayer } from '../entities/SnailPlayer';
-import { TemporaryPlayfield } from '../systems/TemporaryPlayfield';
-import { getTemporaryGimmickCaseLevel } from '../systems/TemporaryLevelDefinitions';
+import { Playfield } from '../systems/Playfield';
+import { getGimmickCaseLevel } from '../systems/LevelDefinitions';
 
 type PlayableCaseSceneData = {
     caseKey?: string;
 };
 
 export class PlayableCaseScene extends Phaser.Scene {
-    private playfield?: TemporaryPlayfield;
+    private playfield?: Playfield;
     private player?: SnailPlayer;
     private followedTarget?: Phaser.GameObjects.GameObject;
 
@@ -18,9 +18,9 @@ export class PlayableCaseScene extends Phaser.Scene {
     }
 
     public create(data: PlayableCaseSceneData): void {
-        const level = getTemporaryGimmickCaseLevel(data.caseKey ?? null);
+        const level = getGimmickCaseLevel(data.caseKey ?? null);
 
-        this.playfield = new TemporaryPlayfield(this, level);
+        this.playfield = new Playfield(this, level);
         this.playfield.create();
 
         this.player = new SnailPlayer(this, this.playfield, this.playfield.getSnailStartPosition());
