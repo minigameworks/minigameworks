@@ -1,15 +1,11 @@
 import Phaser from 'phaser';
-import { TEMPORARY_SNAIL_CONTROL, TEMPORARY_SNAIL_MARKER } from '../config/gameConfig';
-import {
-    AttachmentProbe,
-    AttachmentSurface,
-    TemporaryPlayfield,
-} from '../systems/TemporaryPlayfield';
+import { SNAIL_CONTROL, SNAIL_MARKER } from '../config/gameConfig';
+import { AttachmentProbe, AttachmentSurface, Playfield } from '../systems/Playfield';
 import { SnailInputController } from '../systems/SnailInputController';
 
-type TemporarySnailMode = 'normal' | 'shell';
+type SnailMode = 'normal' | 'shell';
 
-type TemporarySnailMarker = Phaser.GameObjects.Shape &
+type SnailMarker = Phaser.GameObjects.Shape &
     Phaser.Physics.Matter.Components.Gravity &
     Phaser.Physics.Matter.Components.SetBody &
     Phaser.Physics.Matter.Components.Transform &
@@ -24,8 +20,8 @@ type SurfaceMovement = {
 
 export class SnailPlayer {
     private readonly inputController: SnailInputController;
-    private snailMode: TemporarySnailMode = 'normal';
-    private snailMarker?: TemporarySnailMarker;
+    private snailMode: SnailMode = 'normal';
+    private snailMarker?: SnailMarker;
     private normalAttachmentSurface?: AttachmentSurface;
     private recognizedAttachmentSurfaces: AttachmentSurface[] = [];
     private normalVisual?: Phaser.GameObjects.Container;
@@ -43,29 +39,29 @@ export class SnailPlayer {
 
     public constructor(
         private readonly scene: Phaser.Scene,
-        private readonly playfield: TemporaryPlayfield,
+        private readonly playfield: Playfield,
         startPosition: Phaser.Types.Math.Vector2Like,
     ) {
         this.inputController = new SnailInputController(this.scene);
-        this.createTemporarySnailMarker(this.snailMode, startPosition);
+        this.createSnailMarker(this.snailMode, startPosition);
         this.directionArrow = this.scene.add.graphics();
         this.inputDirectionArrow = this.scene.add.graphics();
         this.backDirectionMarker = this.scene.add.graphics();
-        this.debugHudText = this.createTemporaryDebugHudText();
-        this.updateTemporaryDirectionArrow();
-        this.updateTemporaryInputDirectionArrow();
-        this.updateTemporaryBackDirectionMarker();
-        this.updateTemporaryDebugHudText();
-        this.configureTemporaryDebugMarkers();
+        this.debugHudText = this.createDebugHudText();
+        this.updateDirectionArrow();
+        this.updateInputDirectionArrow();
+        this.updateBackDirectionMarker();
+        this.updateDebugHudText();
+        this.configureDebugMarkers();
     }
 
     public update(): void {
-        this.updateTemporarySnailInput();
+        this.updateSnailInput();
     }
 
     public getGameObject(): Phaser.GameObjects.GameObject {
         if (!this.snailMarker) {
-            throw new Error('달팽이 임시 마커가 아직 생성되지 않았다.');
+            throw new Error('달팽이 마커가 아직 생성되지 않았다.');
         }
 
         return this.snailMarker;
@@ -73,7 +69,7 @@ export class SnailPlayer {
 
     public getPosition(): Phaser.Types.Math.Vector2Like {
         if (!this.snailMarker) {
-            throw new Error('달팽이 임시 마커가 아직 생성되지 않았다.');
+            throw new Error('달팽이 마커가 아직 생성되지 않았다.');
         }
 
         return {
@@ -82,68 +78,65 @@ export class SnailPlayer {
         };
     }
 
-    private configureTemporaryDebugMarkers(): void {
+    private configureDebugMarkers(): void {
         this.directionArrow.setDepth(20);
         this.inputDirectionArrow.setDepth(21);
         this.backDirectionMarker.setDepth(22);
     }
 
-    private updateTemporarySnailInput(): void {
+    private updateSnailInput(): void {
         if (!this.snailMarker) {
             return;
         }
 
         if (this.inputController.isShellToggleJustDown()) {
-            this.toggleTemporarySnailMode();
+            this.toggleSnailMode();
         }
 
-        this.getTemporaryRecognizedAttachmentSurfaces();
+        this.getRecognizedAttachmentSurfaces();
 
         if (this.snailMode === 'shell') {
-            this.updateTemporaryShellInput();
+            this.updateShellInput();
         } else {
-            this.updateTemporaryNormalInput();
+            this.updateNormalInput();
         }
 
-        this.alignTemporaryMarkerToSurface();
-        this.applyTemporaryAirDownwardAcceleration();
-        this.syncTemporaryNormalVisual();
-        this.updateTemporaryDirectionArrow();
-        this.updateTemporaryInputDirectionArrow();
-        this.updateTemporaryBackDirectionMarker();
-        this.updateTemporaryDebugHudText();
+        this.alignMarkerToSurface();
+        this.applyAirDownwardAcceleration();
+        this.syncNormalVisual();
+        this.updateDirectionArrow();
+        this.updateInputDirectionArrow();
+        this.updateBackDirectionMarker();
+        this.updateDebugHudText();
     }
 
-    private updateTemporaryShellInput(): void {
+    private updateShellInput(): void {
         if (!this.snailMarker) {
             return;
         }
 
-        const moveDirection = this.getTemporaryMoveDirection();
-        const slopeSurface = this.getTemporaryShellSlopeSurface();
-        const isGrounded = Boolean(this.getTemporarySupportingSurface());
-        const canSteerShell = isGrounded || Boolean(slopeSurface);
+        const moveDirection = this.getMoveDirection();
+        const supportSurface = this.getShellSlidingSupportSurface();
+        const isGrounded = Boolean(this.getSupportingSurface());
+        const canSteerShell = isGrounded || Boolean(supportSurface);
 
         if (moveDirection !== 0) {
             this.facingDirection = { x: moveDirection, y: 0 };
         }
 
-        this.applyTemporaryShellHorizontalAcceleration(moveDirection, canSteerShell);
-        this.applyTemporaryShellSlopeBoost(moveDirection, slopeSurface);
-        this.clampTemporaryShellHorizontalSpeed();
+        this.applyShellHorizontalAcceleration(moveDirection, canSteerShell);
+        this.applyShellSurfaceGravityBoost(moveDirection, supportSurface);
+        this.clampShellHorizontalSpeed();
 
-        if (this.isTemporaryJumpJustDown() && isGrounded) {
+        if (this.isJumpJustDown() && isGrounded) {
             this.snailMarker.setVelocity(
                 this.snailMarker.getVelocity().x,
-                TEMPORARY_SNAIL_CONTROL.shellJumpVelocity,
+                SNAIL_CONTROL.shellJumpVelocity,
             );
         }
     }
 
-    private applyTemporaryShellHorizontalAcceleration(
-        moveDirection: number,
-        canSteerShell: boolean,
-    ): void {
+    private applyShellHorizontalAcceleration(moveDirection: number, canSteerShell: boolean): void {
         if (!this.snailMarker) {
             return;
         }
@@ -152,26 +145,26 @@ export class SnailPlayer {
 
         if (moveDirection !== 0) {
             const acceleration = canSteerShell
-                ? TEMPORARY_SNAIL_CONTROL.shellMoveAcceleration
-                : TEMPORARY_SNAIL_CONTROL.shellAirMoveAcceleration;
+                ? SNAIL_CONTROL.shellMoveAcceleration
+                : SNAIL_CONTROL.shellAirMoveAcceleration;
 
             this.snailMarker.setVelocityX(velocity.x + moveDirection * acceleration);
             return;
         }
 
-        const supportingSurface = this.getTemporarySupportingSurface();
+        const supportingSurface = this.getSupportingSurface();
         const friction = supportingSurface
-            ? this.getTemporaryShellGroundFriction()
-            : TEMPORARY_SNAIL_CONTROL.shellAirFriction;
+            ? this.getShellGroundFriction()
+            : SNAIL_CONTROL.shellAirFriction;
 
         this.snailMarker.setVelocityX(velocity.x * friction);
     }
 
-    private getTemporaryShellGroundFriction(): number {
-        return TEMPORARY_SNAIL_CONTROL.shellGroundFriction;
+    private getShellGroundFriction(): number {
+        return SNAIL_CONTROL.shellGroundFriction;
     }
 
-    private clampTemporaryShellHorizontalSpeed(): void {
+    private clampShellHorizontalSpeed(): void {
         if (!this.snailMarker) {
             return;
         }
@@ -179,8 +172,8 @@ export class SnailPlayer {
         const velocity = this.snailMarker.getVelocity();
         const clampedVelocityX = Phaser.Math.Clamp(
             velocity.x,
-            -TEMPORARY_SNAIL_CONTROL.shellMaxHorizontalSpeed,
-            TEMPORARY_SNAIL_CONTROL.shellMaxHorizontalSpeed,
+            -SNAIL_CONTROL.shellMaxHorizontalSpeed,
+            SNAIL_CONTROL.shellMaxHorizontalSpeed,
         );
 
         if (clampedVelocityX !== velocity.x) {
@@ -188,33 +181,25 @@ export class SnailPlayer {
         }
     }
 
-    private updateTemporaryNormalInput(): void {
+    private updateNormalInput(): void {
         if (!this.snailMarker) {
             return;
         }
 
-        const moveDirection = this.getTemporaryMoveDirection();
-        const climbDirection = this.getTemporaryClimbDirection();
+        const moveDirection = this.getMoveDirection();
+        const climbDirection = this.getClimbDirection();
         const recognizedSurfaces = this.recognizedAttachmentSurfaces;
 
-        if (this.applyTemporarySlipperySurfaceKnockback(recognizedSurfaces)) {
+        if (this.applySlipperySurfaceKnockback(recognizedSurfaces)) {
             return;
         }
 
-        const attachmentSurface = this.isTemporaryNormalAttachLocked()
+        const attachmentSurface = this.isNormalAttachLocked()
             ? undefined
-            : this.selectTemporaryNormalAttachmentSurface(
-                  recognizedSurfaces,
-                  moveDirection,
-                  climbDirection,
-              );
+            : this.selectNormalAttachmentSurface(recognizedSurfaces, moveDirection, climbDirection);
 
         if (attachmentSurface) {
-            this.updateTemporaryAttachedNormalInput(
-                attachmentSurface,
-                moveDirection,
-                climbDirection,
-            );
+            this.updateAttachedNormalInput(attachmentSurface, moveDirection, climbDirection);
             return;
         }
 
@@ -225,18 +210,18 @@ export class SnailPlayer {
             this.facingDirection = { x: moveDirection, y: 0 };
         }
 
-        this.snailMarker.setVelocityX(moveDirection * TEMPORARY_SNAIL_CONTROL.normalMoveSpeed);
+        this.snailMarker.setVelocityX(moveDirection * SNAIL_CONTROL.normalMoveSpeed);
     }
 
-    private getTemporaryMoveDirection(): number {
+    private getMoveDirection(): number {
         return this.inputController.getMoveDirection();
     }
 
-    private getTemporaryClimbDirection(): number {
+    private getClimbDirection(): number {
         return this.inputController.getClimbDirection();
     }
 
-    private updateTemporaryAttachedNormalInput(
+    private updateAttachedNormalInput(
         surface: AttachmentSurface,
         moveDirection: number,
         climbDirection: number,
@@ -245,15 +230,15 @@ export class SnailPlayer {
             return;
         }
 
-        const movement = this.getTemporarySurfaceMovement(surface, moveDirection, climbDirection);
+        const movement = this.getSurfaceMovement(surface, moveDirection, climbDirection);
         const previousSurface = this.normalAttachmentSurface;
 
         this.snailMarker.setIgnoreGravity(true);
         this.normalAttachmentSurface = surface;
-        this.refreshTemporaryNormalSurfaceContactGrace();
-        this.lockTemporaryNormalSurfaceSwitch(previousSurface, surface);
-        this.alignTemporaryMarkerBodyToSurface(surface);
-        this.snapTemporaryNormalMarkerToSurface(surface);
+        this.refreshNormalSurfaceContactGrace();
+        this.lockNormalSurfaceSwitch(previousSurface, surface);
+        this.alignMarkerBodyToSurface(surface);
+        this.snapNormalMarkerToSurface(surface);
 
         this.snailMarker.setVelocity(movement.velocity.x, movement.velocity.y);
 
@@ -262,17 +247,17 @@ export class SnailPlayer {
         }
     }
 
-    private getTemporarySurfaceMovement(
+    private getSurfaceMovement(
         surface: AttachmentSurface,
         moveDirection: number,
         climbDirection: number,
     ): SurfaceMovement {
-        const input = this.getTemporaryWorldInputVector(moveDirection, climbDirection);
+        const input = this.getWorldInputVector(moveDirection, climbDirection);
         const tangentInput = input.x * surface.tangent.x + input.y * surface.tangent.y;
 
-        if (Math.abs(tangentInput) >= TEMPORARY_SNAIL_CONTROL.surfaceInputThreshold) {
+        if (Math.abs(tangentInput) >= SNAIL_CONTROL.surfaceInputThreshold) {
             const amount = Math.sign(tangentInput);
-            const speed = this.getTemporarySurfaceMoveSpeed(surface, amount, true);
+            const speed = this.getSurfaceMoveSpeed(surface, amount, true);
 
             return {
                 velocity: {
@@ -283,11 +268,11 @@ export class SnailPlayer {
             };
         }
 
-        const gravityProjection = this.getTemporarySurfaceGravityProjection(surface);
+        const gravityProjection = this.getSurfaceGravityProjection(surface);
 
-        if (Math.abs(gravityProjection) >= TEMPORARY_SNAIL_CONTROL.surfaceInputThreshold) {
+        if (Math.abs(gravityProjection) >= SNAIL_CONTROL.surfaceInputThreshold) {
             const amount = Math.sign(gravityProjection);
-            const speed = this.getTemporarySurfaceMoveSpeed(surface, amount, false);
+            const speed = this.getSurfaceMoveSpeed(surface, amount, false);
 
             return {
                 velocity: {
@@ -304,7 +289,7 @@ export class SnailPlayer {
         };
     }
 
-    private getTemporaryWorldInputVector(
+    private getWorldInputVector(
         moveDirection: number,
         climbDirection: number,
     ): Phaser.Types.Math.Vector2Like {
@@ -324,54 +309,62 @@ export class SnailPlayer {
         };
     }
 
-    private getTemporaryGravityVector(): Phaser.Types.Math.Vector2Like {
+    private getGravityVector(): Phaser.Types.Math.Vector2Like {
         return { x: 0, y: 1 };
     }
 
-    private getTemporarySurfaceGravityProjection(surface: AttachmentSurface): number {
-        const gravity = this.getTemporaryGravityVector();
+    private getSurfaceGravityProjection(surface: AttachmentSurface): number {
+        const gravity = this.getGravityVector();
 
         return surface.tangent.x * gravity.x + surface.tangent.y * gravity.y;
     }
 
-    private isTemporarySurfaceAgainstGravity(surface: AttachmentSurface): boolean {
-        const gravity = this.getTemporaryGravityVector();
+    private isSurfaceAgainstGravity(surface: AttachmentSurface): boolean {
+        const gravity = this.getGravityVector();
         const normalGravityProjection = surface.normal.x * gravity.x + surface.normal.y * gravity.y;
 
-        return normalGravityProjection <= -TEMPORARY_SNAIL_CONTROL.surfaceInputThreshold;
+        return normalGravityProjection <= -SNAIL_CONTROL.surfaceInputThreshold;
     }
 
-    private getTemporarySurfaceMoveSpeed(
+    private getSurfaceMoveSpeed(
         surface: AttachmentSurface,
         amount: number,
         isManual: boolean,
     ): number {
         if (!isManual) {
-            return TEMPORARY_SNAIL_CONTROL.normalPassiveSlideSpeed;
+            return SNAIL_CONTROL.normalPassiveSlideSpeed;
         }
 
         const gravityProjection =
-            surface.tangent.x * amount * this.getTemporaryGravityVector().x +
-            surface.tangent.y * amount * this.getTemporaryGravityVector().y;
+            surface.tangent.x * amount * this.getGravityVector().x +
+            surface.tangent.y * amount * this.getGravityVector().y;
 
-        if (gravityProjection > TEMPORARY_SNAIL_CONTROL.surfaceInputThreshold) {
-            return TEMPORARY_SNAIL_CONTROL.normalClimbDownSpeed;
+        if (gravityProjection > SNAIL_CONTROL.surfaceInputThreshold) {
+            return SNAIL_CONTROL.normalClimbDownSpeed;
         }
 
-        if (gravityProjection < -TEMPORARY_SNAIL_CONTROL.surfaceInputThreshold) {
-            return TEMPORARY_SNAIL_CONTROL.normalClimbSpeed;
+        if (gravityProjection < -SNAIL_CONTROL.surfaceInputThreshold) {
+            const targetVerticalSpeed = Math.min(
+                SNAIL_CONTROL.normalClimbSpeed / Math.abs(gravityProjection),
+                SNAIL_CONTROL.normalSlopeClimbMaxVerticalSpeed,
+            );
+
+            return Math.min(
+                targetVerticalSpeed / Math.abs(gravityProjection),
+                SNAIL_CONTROL.normalSlopeClimbMaxSpeed,
+            );
         }
 
-        return TEMPORARY_SNAIL_CONTROL.normalAttachMoveSpeed;
+        return SNAIL_CONTROL.normalAttachMoveSpeed;
     }
 
-    private selectTemporaryNormalAttachmentSurface(
+    private selectNormalAttachmentSurface(
         surfaces: AttachmentSurface[],
         moveDirection: number,
         climbDirection: number,
     ): AttachmentSurface | undefined {
         if (surfaces.length === 0) {
-            if (this.normalAttachmentSurface && this.isTemporaryNormalSurfaceContactGraceActive()) {
+            if (this.normalAttachmentSurface && this.isNormalSurfaceContactGraceActive()) {
                 return this.normalAttachmentSurface;
             }
 
@@ -379,7 +372,7 @@ export class SnailPlayer {
         }
 
         const attachableSurfaces = surfaces.filter((surface) =>
-            this.isTemporaryNormalAttachableSurface(surface),
+            this.isNormalAttachableSurface(surface),
         );
 
         if (attachableSurfaces.length === 0) {
@@ -387,24 +380,20 @@ export class SnailPlayer {
         }
 
         const currentSurface = attachableSurfaces.find((surface) =>
-            this.isSameTemporarySurface(surface, this.normalAttachmentSurface),
+            this.isSameSurface(surface, this.normalAttachmentSurface),
         );
 
         const stableCurrentSurface =
             currentSurface &&
-            !this.isTemporaryInputPushingPastSurfaceEnd(
-                currentSurface,
-                moveDirection,
-                climbDirection,
-            )
+            !this.isInputPushingPastSurfaceEnd(currentSurface, moveDirection, climbDirection)
                 ? currentSurface
                 : undefined;
 
-        if (stableCurrentSurface && this.isTemporaryNormalSurfaceSwitchLocked()) {
+        if (stableCurrentSurface && this.isNormalSurfaceSwitchLocked()) {
             return stableCurrentSurface;
         }
 
-        const inputSurface = this.getTemporaryInputAttachmentSurface(
+        const inputSurface = this.getInputAttachmentSurface(
             attachableSurfaces,
             moveDirection,
             climbDirection,
@@ -416,14 +405,25 @@ export class SnailPlayer {
             return inputSurface;
         }
 
+        const connectedSurface = this.getConnectedAttachmentSurface(
+            attachableSurfaces,
+            currentSurface,
+            moveDirection,
+            climbDirection,
+        );
+
+        if (connectedSurface) {
+            return connectedSurface;
+        }
+
         if (stableCurrentSurface) {
             return stableCurrentSurface;
         }
 
-        return attachableSurfaces.find((surface) => this.isTemporarySurfaceAgainstGravity(surface));
+        return attachableSurfaces.find((surface) => this.isSurfaceAgainstGravity(surface));
     }
 
-    private getTemporaryRecognizedAttachmentSurfaces(): AttachmentSurface[] {
+    private getRecognizedAttachmentSurfaces(): AttachmentSurface[] {
         if (!this.snailMarker) {
             this.recognizedAttachmentSurfaces = [];
 
@@ -432,20 +432,20 @@ export class SnailPlayer {
 
         this.recognizedAttachmentSurfaces = this.playfield.getAttachmentSurfaces(
             this.snailMarker,
-            this.getTemporaryAttachmentProbe(),
-            TEMPORARY_SNAIL_CONTROL.contactTolerance,
+            this.getAttachmentProbe(),
+            SNAIL_CONTROL.contactTolerance,
         );
 
         return this.recognizedAttachmentSurfaces;
     }
 
-    private applyTemporarySlipperySurfaceKnockback(surfaces: AttachmentSurface[]): boolean {
+    private applySlipperySurfaceKnockback(surfaces: AttachmentSurface[]): boolean {
         if (!this.snailMarker || this.scene.time.now < this.slipperyKnockbackLockedUntil) {
             return false;
         }
 
         const slipperySurface = surfaces.find(
-            (surface) => !this.isTemporaryNormalAttachableSurface(surface),
+            (surface) => !this.isNormalAttachableSurface(surface),
         );
 
         if (!slipperySurface) {
@@ -453,33 +453,32 @@ export class SnailPlayer {
         }
 
         const velocity = this.snailMarker.getVelocity();
-        const nextVelocityX =
-            slipperySurface.normal.x * TEMPORARY_SNAIL_CONTROL.slipperyKnockbackSpeed;
+        const nextVelocityX = slipperySurface.normal.x * SNAIL_CONTROL.slipperyKnockbackSpeed;
         const nextVelocityY = Math.max(
             velocity.y,
-            slipperySurface.normal.y * TEMPORARY_SNAIL_CONTROL.slipperyKnockbackSpeed,
-            TEMPORARY_SNAIL_CONTROL.slipperyKnockbackFallSpeed,
+            slipperySurface.normal.y * SNAIL_CONTROL.slipperyKnockbackSpeed,
+            SNAIL_CONTROL.slipperyKnockbackFallSpeed,
         );
 
         this.snailMarker.setIgnoreGravity(false);
         this.normalAttachmentSurface = undefined;
         this.normalAttachLockedUntil =
-            this.scene.time.now + TEMPORARY_SNAIL_CONTROL.slipperyKnockbackCooldownMs;
+            this.scene.time.now + SNAIL_CONTROL.slipperyKnockbackCooldownMs;
         this.slipperyKnockbackLockedUntil =
-            this.scene.time.now + TEMPORARY_SNAIL_CONTROL.slipperyKnockbackCooldownMs;
+            this.scene.time.now + SNAIL_CONTROL.slipperyKnockbackCooldownMs;
         this.snailMarker.setVelocity(nextVelocityX, nextVelocityY);
 
         return true;
     }
 
-    private getTemporaryInputAttachmentSurface(
+    private getInputAttachmentSurface(
         surfaces: AttachmentSurface[],
         moveDirection: number,
         climbDirection: number,
         stableCurrentSurface?: AttachmentSurface,
         currentSurface?: AttachmentSurface,
     ): AttachmentSurface | undefined {
-        const input = this.getTemporaryWorldInputVector(moveDirection, climbDirection);
+        const input = this.getWorldInputVector(moveDirection, climbDirection);
 
         if (input.x === 0 && input.y === 0) {
             return undefined;
@@ -493,16 +492,24 @@ export class SnailPlayer {
             }))
             .filter(
                 (candidate) =>
-                    Math.abs(candidate.projection) >= TEMPORARY_SNAIL_CONTROL.surfaceInputThreshold,
+                    Math.abs(candidate.projection) >= SNAIL_CONTROL.surfaceInputThreshold,
             )
             .filter(
                 (candidate) =>
-                    !this.isSameTemporarySurface(candidate.surface, currentSurface) ||
-                    !this.isTemporaryProjectionPushingPastSurfaceEnd(
+                    !this.isSameSurface(candidate.surface, currentSurface) ||
+                    !this.isProjectionPushingPastSurfaceEnd(
                         candidate.surface,
                         candidate.projection,
                     ),
             );
+
+        const entryCandidate = currentSurface
+            ? this.getSurfaceEntryCandidate(candidates, currentSurface)
+            : undefined;
+
+        if (entryCandidate) {
+            return entryCandidate.surface;
+        }
 
         const bestCandidate = candidates.sort(
             (a, b) => Math.abs(b.projection) - Math.abs(a.projection) || a.index - b.index,
@@ -514,14 +521,14 @@ export class SnailPlayer {
 
         const currentCandidate = stableCurrentSurface
             ? candidates.find((candidate) =>
-                  this.isSameTemporarySurface(candidate.surface, stableCurrentSurface),
+                  this.isSameSurface(candidate.surface, stableCurrentSurface),
               )
             : undefined;
 
         if (
             currentCandidate &&
             Math.abs(bestCandidate.projection) - Math.abs(currentCandidate.projection) <=
-                TEMPORARY_SNAIL_CONTROL.surfaceSwitchProjectionMargin
+                SNAIL_CONTROL.surfaceSwitchProjectionMargin
         ) {
             return currentCandidate.surface;
         }
@@ -529,36 +536,173 @@ export class SnailPlayer {
         return bestCandidate.surface;
     }
 
-    private isTemporaryInputPushingPastSurfaceEnd(
+    private getSurfaceEntryCandidate(
+        candidates: Array<{
+            surface: AttachmentSurface;
+            index: number;
+            projection: number;
+        }>,
+        currentSurface: AttachmentSurface,
+    ): { surface: AttachmentSurface; index: number; projection: number } | undefined {
+        return candidates
+            .filter((candidate) => !this.isSameSurface(candidate.surface, currentSurface))
+            .filter((candidate) =>
+                this.isInputEnteringSurfaceFromCurrentSurface(
+                    candidate.surface,
+                    currentSurface,
+                    candidate.projection,
+                ),
+            )
+            .sort(
+                (a, b) =>
+                    Math.abs(b.projection) - Math.abs(a.projection) ||
+                    this.getNearestEndpointDistance(a.surface, currentSurface) -
+                        this.getNearestEndpointDistance(b.surface, currentSurface) ||
+                    a.index - b.index,
+            )[0];
+    }
+
+    private isInputEnteringSurfaceFromCurrentSurface(
+        surface: AttachmentSurface,
+        currentSurface: AttachmentSurface,
+        projection: number,
+    ): boolean {
+        if (Math.abs(projection) < SNAIL_CONTROL.surfaceInputThreshold) {
+            return false;
+        }
+
+        const isNearStart =
+            surface.progress <= SNAIL_CONTROL.surfaceEndProgressTolerance &&
+            projection > 0 &&
+            this.getSurfacePointDistance(currentSurface, surface.start) <=
+                SNAIL_CONTROL.surfaceConnectionTolerance;
+        const isNearEnd =
+            surface.progress >= 1 - SNAIL_CONTROL.surfaceEndProgressTolerance &&
+            projection < 0 &&
+            this.getSurfacePointDistance(currentSurface, surface.end) <=
+                SNAIL_CONTROL.surfaceConnectionTolerance;
+
+        return isNearStart || isNearEnd;
+    }
+
+    private getNearestEndpointDistance(
+        surface: AttachmentSurface,
+        targetSurface: AttachmentSurface,
+    ): number {
+        return Math.min(
+            this.getSurfacePointDistance(targetSurface, surface.start),
+            this.getSurfacePointDistance(targetSurface, surface.end),
+        );
+    }
+
+    private getConnectedAttachmentSurface(
+        surfaces: AttachmentSurface[],
+        currentSurface: AttachmentSurface | undefined,
+        moveDirection: number,
+        climbDirection: number,
+    ): AttachmentSurface | undefined {
+        if (!currentSurface) {
+            return undefined;
+        }
+
+        const input = this.getWorldInputVector(moveDirection, climbDirection);
+        const projection = input.x * currentSurface.tangent.x + input.y * currentSurface.tangent.y;
+
+        if (!this.isProjectionPushingPastSurfaceEnd(currentSurface, projection)) {
+            return undefined;
+        }
+
+        const connectionPoint = projection > 0 ? currentSurface.end : currentSurface.start;
+        const connectedSurfaces = surfaces
+            .filter((surface) => !this.isSameSurface(surface, currentSurface))
+            .map((surface) => ({
+                surface,
+                distance: this.getSurfacePointDistance(surface, connectionPoint),
+                directionProjection: this.getSurfaceDirectionProjection(surface, input),
+            }))
+            .filter(
+                (candidate) =>
+                    candidate.distance <= SNAIL_CONTROL.surfaceConnectionTolerance &&
+                    candidate.directionProjection >= SNAIL_CONTROL.surfaceInputThreshold,
+            );
+
+        return connectedSurfaces.sort(
+            (a, b) =>
+                b.directionProjection - a.directionProjection ||
+                a.distance - b.distance ||
+                a.surface.edgeId.localeCompare(b.surface.edgeId),
+        )[0]?.surface;
+    }
+
+    private getSurfaceDirectionProjection(
+        surface: AttachmentSurface,
+        input: Phaser.Types.Math.Vector2Like,
+    ): number {
+        const forwardProjection = input.x * surface.tangent.x + input.y * surface.tangent.y;
+        const backwardProjection = -forwardProjection;
+
+        return Math.max(forwardProjection, backwardProjection);
+    }
+
+    private getSurfacePointDistance(
+        surface: AttachmentSurface,
+        point: Phaser.Types.Math.Vector2Like,
+    ): number {
+        const surfaceVector = {
+            x: surface.end.x - surface.start.x,
+            y: surface.end.y - surface.start.y,
+        };
+        const surfaceLength = Math.hypot(surfaceVector.x, surfaceVector.y);
+
+        if (surfaceLength <= 0) {
+            return Number.POSITIVE_INFINITY;
+        }
+
+        const tangent = {
+            x: surfaceVector.x / surfaceLength,
+            y: surfaceVector.y / surfaceLength,
+        };
+        const delta = {
+            x: point.x - surface.start.x,
+            y: point.y - surface.start.y,
+        };
+        const tangentProjection = delta.x * tangent.x + delta.y * tangent.y;
+        const tangentDistance = Math.min(Math.max(tangentProjection, 0), surfaceLength);
+        const closestPoint = {
+            x: surface.start.x + tangent.x * tangentDistance,
+            y: surface.start.y + tangent.y * tangentDistance,
+        };
+
+        return Math.hypot(point.x - closestPoint.x, point.y - closestPoint.y);
+    }
+
+    private isInputPushingPastSurfaceEnd(
         surface: AttachmentSurface,
         moveDirection: number,
         climbDirection: number,
     ): boolean {
-        const input = this.getTemporaryWorldInputVector(moveDirection, climbDirection);
+        const input = this.getWorldInputVector(moveDirection, climbDirection);
         const projection = input.x * surface.tangent.x + input.y * surface.tangent.y;
 
-        return this.isTemporaryProjectionPushingPastSurfaceEnd(surface, projection);
+        return this.isProjectionPushingPastSurfaceEnd(surface, projection);
     }
 
-    private isTemporaryProjectionPushingPastSurfaceEnd(
+    private isProjectionPushingPastSurfaceEnd(
         surface: AttachmentSurface,
         projection: number,
     ): boolean {
-        if (Math.abs(projection) < TEMPORARY_SNAIL_CONTROL.surfaceInputThreshold) {
+        if (Math.abs(projection) < SNAIL_CONTROL.surfaceInputThreshold) {
             return false;
         }
 
         if (projection > 0) {
-            return surface.progress >= 1 - TEMPORARY_SNAIL_CONTROL.surfaceEndProgressTolerance;
+            return surface.progress >= 1 - SNAIL_CONTROL.surfaceEndProgressTolerance;
         }
 
-        return surface.progress <= TEMPORARY_SNAIL_CONTROL.surfaceEndProgressTolerance;
+        return surface.progress <= SNAIL_CONTROL.surfaceEndProgressTolerance;
     }
 
-    private isSameTemporarySurface(
-        surface: AttachmentSurface,
-        target?: AttachmentSurface,
-    ): boolean {
+    private isSameSurface(surface: AttachmentSurface, target?: AttachmentSurface): boolean {
         if (!target) {
             return false;
         }
@@ -566,36 +710,36 @@ export class SnailPlayer {
         return surface.edgeId === target.edgeId;
     }
 
-    private isTemporaryNormalAttachableSurface(surface: AttachmentSurface): boolean {
+    private isNormalAttachableSurface(surface: AttachmentSurface): boolean {
         return surface.material !== 'slippery';
     }
 
-    private lockTemporaryNormalSurfaceSwitch(
+    private lockNormalSurfaceSwitch(
         previousSurface: AttachmentSurface | undefined,
         nextSurface: AttachmentSurface,
     ): void {
-        if (this.isSameTemporarySurface(nextSurface, previousSurface)) {
+        if (this.isSameSurface(nextSurface, previousSurface)) {
             return;
         }
 
         this.normalSurfaceSwitchLockedUntil =
-            this.scene.time.now + TEMPORARY_SNAIL_CONTROL.surfaceSwitchLockMs;
+            this.scene.time.now + SNAIL_CONTROL.surfaceSwitchLockMs;
     }
 
-    private isTemporaryNormalSurfaceSwitchLocked(): boolean {
+    private isNormalSurfaceSwitchLocked(): boolean {
         return this.scene.time.now < this.normalSurfaceSwitchLockedUntil;
     }
 
-    private refreshTemporaryNormalSurfaceContactGrace(): void {
+    private refreshNormalSurfaceContactGrace(): void {
         this.normalSurfaceContactGraceUntil =
-            this.scene.time.now + TEMPORARY_SNAIL_CONTROL.surfaceContactGraceMs;
+            this.scene.time.now + SNAIL_CONTROL.surfaceContactGraceMs;
     }
 
-    private isTemporaryNormalSurfaceContactGraceActive(): boolean {
+    private isNormalSurfaceContactGraceActive(): boolean {
         return this.scene.time.now < this.normalSurfaceContactGraceUntil;
     }
 
-    private applyTemporaryShellSlopeBoost(
+    private applyShellSurfaceGravityBoost(
         moveDirection: number,
         surface: AttachmentSurface | undefined,
     ): void {
@@ -603,7 +747,7 @@ export class SnailPlayer {
             return;
         }
 
-        const gravityProjection = this.getTemporarySurfaceGravityProjection(surface);
+        const gravityProjection = this.getSurfaceGravityProjection(surface);
         const downhill =
             gravityProjection > 0
                 ? surface.tangent
@@ -613,12 +757,12 @@ export class SnailPlayer {
                   };
         const acceleration =
             moveDirection === 0
-                ? TEMPORARY_SNAIL_CONTROL.shellSlopePassiveAcceleration
-                : TEMPORARY_SNAIL_CONTROL.shellSlopeInputAcceleration;
+                ? SNAIL_CONTROL.shellSlopePassiveAcceleration
+                : SNAIL_CONTROL.shellSlopeInputAcceleration;
         const maxSpeed =
             moveDirection === 0
-                ? TEMPORARY_SNAIL_CONTROL.shellSlopePassiveMaxSpeed
-                : TEMPORARY_SNAIL_CONTROL.shellSlopeInputMaxSpeed;
+                ? SNAIL_CONTROL.shellSlopePassiveMaxSpeed
+                : SNAIL_CONTROL.shellSlopeInputMaxSpeed;
         if (moveDirection !== 0 && Math.sign(downhill.x) !== moveDirection) {
             return;
         }
@@ -640,13 +784,13 @@ export class SnailPlayer {
         this.snailMarker.setVelocity(nextVelocity.x, nextVelocity.y);
     }
 
-    private getTemporaryShellSlopeSurface(): AttachmentSurface | undefined {
-        const surface = this.getTemporarySupportingSurface();
+    private getShellSlidingSupportSurface(): AttachmentSurface | undefined {
+        const surface = this.getSupportingSurface();
 
         if (
             !surface ||
-            !this.isTemporarySurfaceAgainstGravity(surface) ||
-            Math.abs(this.getTemporarySurfaceGravityProjection(surface)) < 0.05
+            !this.isSurfaceAgainstGravity(surface) ||
+            Math.abs(this.getSurfaceGravityProjection(surface)) < 0.05
         ) {
             return undefined;
         }
@@ -654,12 +798,8 @@ export class SnailPlayer {
         return surface;
     }
 
-    private applyTemporaryAirDownwardAcceleration(): void {
-        if (
-            !this.snailMarker ||
-            this.normalAttachmentSurface ||
-            this.getTemporarySupportingSurface()
-        ) {
+    private applyAirDownwardAcceleration(): void {
+        if (!this.snailMarker || this.normalAttachmentSurface || this.getSupportingSurface()) {
             return;
         }
 
@@ -667,78 +807,71 @@ export class SnailPlayer {
 
         this.snailMarker.setVelocity(
             velocity.x,
-            velocity.y + TEMPORARY_SNAIL_CONTROL.temporaryShortHopFallAcceleration,
+            velocity.y + SNAIL_CONTROL.shortHopFallAcceleration,
         );
     }
 
-    private isTemporaryJumpJustDown(): boolean {
+    private isJumpJustDown(): boolean {
         return this.inputController.isJumpJustDown();
     }
 
-    private toggleTemporarySnailMode(): void {
+    private toggleSnailMode(): void {
         if (!this.snailMarker) {
             return;
         }
 
         const previousMarker = this.snailMarker;
         const previousVelocity = previousMarker.getVelocity();
-        const nextMode: TemporarySnailMode = this.snailMode === 'normal' ? 'shell' : 'normal';
+        const nextMode: SnailMode = this.snailMode === 'normal' ? 'shell' : 'normal';
         const position = {
             x: previousMarker.x,
             y: previousMarker.y,
         };
 
-        this.destroyTemporaryNormalVisual();
+        this.destroyNormalVisual();
         previousMarker.destroy();
         this.snailMode = nextMode;
         this.normalAttachmentSurface = undefined;
         this.visualSurfaceEdgeId = undefined;
         this.normalAttachLockedUntil =
             nextMode === 'normal'
-                ? this.scene.time.now + TEMPORARY_SNAIL_CONTROL.modeSwitchAttachCooldownMs
+                ? this.scene.time.now + SNAIL_CONTROL.modeSwitchAttachCooldownMs
                 : 0;
-        this.createTemporarySnailMarker(nextMode, position);
+        this.createSnailMarker(nextMode, position);
         this.snailMarker?.setVelocity(previousVelocity.x, previousVelocity.y);
-        this.syncTemporaryNormalVisual();
-        this.updateTemporaryDirectionArrow();
-        this.updateTemporaryInputDirectionArrow();
-        this.updateTemporaryBackDirectionMarker();
+        this.syncNormalVisual();
+        this.updateDirectionArrow();
+        this.updateInputDirectionArrow();
+        this.updateBackDirectionMarker();
     }
 
-    private createTemporarySnailMarker(
-        mode: TemporarySnailMode,
-        position: Phaser.Types.Math.Vector2Like,
-    ): void {
+    private createSnailMarker(mode: SnailMode, position: Phaser.Types.Math.Vector2Like): void {
         const marker =
-            mode === 'shell'
-                ? this.createTemporaryShellMarker(position)
-                : this.createTemporaryNormalMarker(position);
+            mode === 'shell' ? this.createShellMarker(position) : this.createNormalMarker(position);
 
         this.snailMarker = marker;
     }
 
-    private isTemporaryNormalAttachLocked(): boolean {
+    private isNormalAttachLocked(): boolean {
         return this.scene.time.now < this.normalAttachLockedUntil;
     }
 
-    private createTemporaryNormalMarker(
-        position: Phaser.Types.Math.Vector2Like,
-    ): TemporarySnailMarker {
+    private createNormalMarker(position: Phaser.Types.Math.Vector2Like): SnailMarker {
         const marker = this.scene.add.circle(
             position.x,
             position.y,
             1,
-            TEMPORARY_SNAIL_MARKER.normalColor,
+            SNAIL_MARKER.normalColor,
             0,
         );
-        const radius = TEMPORARY_SNAIL_MARKER.normalSegmentRadius;
-        const halfSpacing = TEMPORARY_SNAIL_MARKER.normalSegmentSpacing / 2;
+        const radius = SNAIL_MARKER.normalSegmentRadius;
+        const halfSpacing = SNAIL_MARKER.normalSegmentSpacing / 2;
         const frontBody = this.scene.matter.bodies.circle(
             position.x + halfSpacing,
             position.y,
             radius,
             {
-                label: 'temporary-normal-snail-front-segment',
+                label: 'normal-snail-front-segment',
             },
         );
         const backBody = this.scene.matter.bodies.circle(
@@ -746,26 +879,26 @@ export class SnailPlayer {
             position.y,
             radius,
             {
-                label: 'temporary-normal-snail-back-segment',
+                label: 'normal-snail-back-segment',
             },
         );
         const compoundBody = this.scene.matter.body.create({
-            label: 'temporary-normal-snail-marker',
+            label: 'normal-snail-marker',
             parts: [frontBody, backBody],
-            restitution: TEMPORARY_SNAIL_MARKER.restitution,
+            restitution: SNAIL_MARKER.restitution,
         });
 
-        const matterMarker = this.scene.matter.add.gameObject(marker) as TemporarySnailMarker;
+        const matterMarker = this.scene.matter.add.gameObject(marker) as SnailMarker;
 
         matterMarker.setExistingBody(compoundBody);
         matterMarker.setFixedRotation();
         matterMarker.setIgnoreGravity(false);
-        this.normalVisual = this.createTemporaryNormalVisual(position);
+        this.normalVisual = this.createNormalVisual(position);
 
         return matterMarker;
     }
 
-    private snapTemporaryNormalMarkerToSurface(surface: AttachmentSurface): void {
+    private snapNormalMarkerToSurface(surface: AttachmentSurface): void {
         if (!this.snailMarker) {
             return;
         }
@@ -773,7 +906,7 @@ export class SnailPlayer {
         this.snailMarker.setPosition(surface.snapPosition.x, surface.snapPosition.y);
     }
 
-    private alignTemporaryMarkerBodyToSurface(surface: AttachmentSurface): void {
+    private alignMarkerBodyToSurface(surface: AttachmentSurface): void {
         if (!this.snailMarker) {
             return;
         }
@@ -783,51 +916,49 @@ export class SnailPlayer {
         this.snailMarker.setAngle(surfaceAngle);
     }
 
-    private createTemporaryShellMarker(
-        position: Phaser.Types.Math.Vector2Like,
-    ): TemporarySnailMarker {
+    private createShellMarker(position: Phaser.Types.Math.Vector2Like): SnailMarker {
         const marker = this.scene.add.circle(
             position.x,
             position.y,
-            TEMPORARY_SNAIL_MARKER.shellRadius,
-            TEMPORARY_SNAIL_MARKER.shellColor,
+            SNAIL_MARKER.shellRadius,
+            SNAIL_MARKER.shellColor,
         );
 
         const matterMarker = this.scene.matter.add.gameObject(marker, {
-            label: 'temporary-shell-snail-marker',
+            label: 'shell-snail-marker',
             shape: {
                 type: 'circle',
-                radius: TEMPORARY_SNAIL_MARKER.shellRadius,
+                radius: SNAIL_MARKER.shellRadius,
             },
-            restitution: TEMPORARY_SNAIL_MARKER.restitution,
-        }) as TemporarySnailMarker;
+            restitution: SNAIL_MARKER.restitution,
+        }) as SnailMarker;
 
         matterMarker.setIgnoreGravity(false);
 
         return matterMarker;
     }
 
-    private createTemporaryNormalVisual(
+    private createNormalVisual(
         position: Phaser.Types.Math.Vector2Like,
     ): Phaser.GameObjects.Container {
         const frontSegment = this.scene.add.circle(
-            TEMPORARY_SNAIL_MARKER.normalSegmentSpacing / 2,
+            SNAIL_MARKER.normalSegmentSpacing / 2,
             0,
-            TEMPORARY_SNAIL_MARKER.normalSegmentRadius,
-            TEMPORARY_SNAIL_MARKER.normalColor,
+            SNAIL_MARKER.normalSegmentRadius,
+            SNAIL_MARKER.normalColor,
         );
         const backSegment = this.scene.add.circle(
-            -TEMPORARY_SNAIL_MARKER.normalSegmentSpacing / 2,
+            -SNAIL_MARKER.normalSegmentSpacing / 2,
             0,
-            TEMPORARY_SNAIL_MARKER.normalSegmentRadius,
-            TEMPORARY_SNAIL_MARKER.normalBackColor,
+            SNAIL_MARKER.normalSegmentRadius,
+            SNAIL_MARKER.normalBackColor,
         );
         const connector = this.scene.add.rectangle(
             0,
             0,
-            TEMPORARY_SNAIL_MARKER.normalConnectorWidth,
-            TEMPORARY_SNAIL_MARKER.normalConnectorHeight,
-            TEMPORARY_SNAIL_MARKER.normalConnectorColor,
+            SNAIL_MARKER.normalConnectorWidth,
+            SNAIL_MARKER.normalConnectorHeight,
+            SNAIL_MARKER.normalConnectorColor,
         );
 
         const visual = this.scene.add.container(position.x, position.y, [
@@ -841,17 +972,17 @@ export class SnailPlayer {
         return visual;
     }
 
-    private syncTemporaryNormalVisual(): void {
+    private syncNormalVisual(): void {
         if (!this.normalVisual || !this.snailMarker) {
             return;
         }
 
         this.normalVisual.setPosition(this.snailMarker.x, this.snailMarker.y);
         this.normalVisual.setRotation(this.visualSurfaceRotation);
-        this.normalVisual.setScale(this.getTemporaryNormalVisualDirectionScale(), 1);
+        this.normalVisual.setScale(this.getNormalVisualDirectionScale(), 1);
     }
 
-    private getTemporaryNormalVisualDirectionScale(): number {
+    private getNormalVisualDirectionScale(): number {
         if (!this.snailMarker) {
             return 1;
         }
@@ -859,7 +990,7 @@ export class SnailPlayer {
         const surface =
             this.snailMode === 'normal'
                 ? this.normalAttachmentSurface
-                : this.getTemporarySupportingSurface();
+                : this.getSupportingSurface();
         const tangent = surface
             ? surface.tangent
             : {
@@ -872,12 +1003,12 @@ export class SnailPlayer {
         return facingProjection < 0 ? -1 : 1;
     }
 
-    private destroyTemporaryNormalVisual(): void {
+    private destroyNormalVisual(): void {
         this.normalVisual?.destroy();
         this.normalVisual = undefined;
     }
 
-    private alignTemporaryMarkerToSurface(): void {
+    private alignMarkerToSurface(): void {
         if (!this.snailMarker) {
             return;
         }
@@ -885,7 +1016,7 @@ export class SnailPlayer {
         const surface =
             this.snailMode === 'normal'
                 ? this.normalAttachmentSurface
-                : this.getTemporarySupportingSurface();
+                : this.getSupportingSurface();
 
         if (!surface) {
             if (this.snailMode === 'normal') {
@@ -893,7 +1024,7 @@ export class SnailPlayer {
                 this.visualSurfaceRotation = Phaser.Math.Angle.RotateTo(
                     this.visualSurfaceRotation,
                     0,
-                    TEMPORARY_SNAIL_MARKER.surfaceRotationLerp,
+                    SNAIL_MARKER.surfaceRotationLerp,
                 );
                 this.visualSurfaceEdgeId = undefined;
             }
@@ -915,19 +1046,18 @@ export class SnailPlayer {
         this.visualSurfaceRotation = Phaser.Math.Angle.RotateTo(
             this.visualSurfaceRotation,
             surfaceRotation,
-            TEMPORARY_SNAIL_MARKER.surfaceRotationLerp,
+            SNAIL_MARKER.surfaceRotationLerp,
         );
     }
 
-    private updateTemporaryDirectionArrow(): void {
+    private updateDirectionArrow(): void {
         if (!this.snailMarker) {
             return;
         }
 
-        const length = TEMPORARY_SNAIL_MARKER.directionArrowLength;
-        const halfWidth = TEMPORARY_SNAIL_MARKER.directionArrowWidth / 2;
-        const baseDistance =
-            this.getTemporarySnailHalfSize() + TEMPORARY_SNAIL_MARKER.directionArrowGap;
+        const length = SNAIL_MARKER.directionArrowLength;
+        const halfWidth = SNAIL_MARKER.directionArrowWidth / 2;
+        const baseDistance = this.getSnailHalfSize() + SNAIL_MARKER.directionArrowGap;
         const tipDistance = baseDistance + length;
         const frontX = this.snailMarker.x + this.facingDirection.x * tipDistance;
         const frontY = this.snailMarker.y + this.facingDirection.y * tipDistance;
@@ -937,7 +1067,7 @@ export class SnailPlayer {
         const perpendicularY = this.facingDirection.x;
 
         this.directionArrow.clear();
-        this.directionArrow.fillStyle(TEMPORARY_SNAIL_MARKER.directionColor, 1);
+        this.directionArrow.fillStyle(SNAIL_MARKER.directionColor, 1);
         this.directionArrow.fillTriangle(
             frontX,
             frontY,
@@ -948,14 +1078,14 @@ export class SnailPlayer {
         );
     }
 
-    private updateTemporaryInputDirectionArrow(): void {
+    private updateInputDirectionArrow(): void {
         if (!this.snailMarker) {
             return;
         }
 
-        const inputDirection = this.getTemporaryWorldInputVector(
-            this.getTemporaryMoveDirection(),
-            this.getTemporaryClimbDirection(),
+        const inputDirection = this.getWorldInputVector(
+            this.getMoveDirection(),
+            this.getClimbDirection(),
         );
 
         this.inputDirectionArrow.clear();
@@ -964,46 +1094,44 @@ export class SnailPlayer {
             return;
         }
 
-        this.drawTemporaryDirectionTriangle(
+        this.drawDirectionTriangle(
             this.inputDirectionArrow,
             inputDirection,
-            TEMPORARY_SNAIL_MARKER.inputDirectionColor,
-            TEMPORARY_SNAIL_MARKER.inputArrowLength,
-            TEMPORARY_SNAIL_MARKER.inputArrowWidth,
-            this.getTemporarySnailHalfSize() + TEMPORARY_SNAIL_MARKER.directionArrowGap + 20,
+            SNAIL_MARKER.inputDirectionColor,
+            SNAIL_MARKER.inputArrowLength,
+            SNAIL_MARKER.inputArrowWidth,
+            this.getSnailHalfSize() + SNAIL_MARKER.directionArrowGap + 20,
         );
     }
 
-    private updateTemporaryBackDirectionMarker(): void {
+    private updateBackDirectionMarker(): void {
         if (!this.snailMarker) {
             return;
         }
 
-        const backDirection = this.getTemporaryBackDirection();
-        const startDistance = this.getTemporarySnailHalfSize() - 2;
+        const backDirection = this.getBackDirection();
+        const startDistance = this.getSnailHalfSize() - 2;
         const startX = this.snailMarker.x + backDirection.x * startDistance;
         const startY = this.snailMarker.y + backDirection.y * startDistance;
         const endX =
-            this.snailMarker.x +
-            backDirection.x * (startDistance + TEMPORARY_SNAIL_MARKER.backMarkerLength);
+            this.snailMarker.x + backDirection.x * (startDistance + SNAIL_MARKER.backMarkerLength);
         const endY =
-            this.snailMarker.y +
-            backDirection.y * (startDistance + TEMPORARY_SNAIL_MARKER.backMarkerLength);
+            this.snailMarker.y + backDirection.y * (startDistance + SNAIL_MARKER.backMarkerLength);
 
         this.backDirectionMarker.clear();
         this.backDirectionMarker.lineStyle(
-            TEMPORARY_SNAIL_MARKER.backMarkerWidth,
-            TEMPORARY_SNAIL_MARKER.backDirectionColor,
+            SNAIL_MARKER.backMarkerWidth,
+            SNAIL_MARKER.backDirectionColor,
             1,
         );
         this.backDirectionMarker.lineBetween(startX, startY, endX, endY);
     }
 
-    private getTemporaryBackDirection(): Phaser.Types.Math.Vector2Like {
+    private getBackDirection(): Phaser.Types.Math.Vector2Like {
         const surface =
             this.snailMode === 'normal'
                 ? this.normalAttachmentSurface
-                : this.getTemporarySupportingSurface();
+                : this.getSupportingSurface();
 
         if (surface) {
             return surface.normal;
@@ -1012,7 +1140,7 @@ export class SnailPlayer {
         return { x: 0, y: -1 };
     }
 
-    private createTemporaryDebugHudText(): Phaser.GameObjects.Text {
+    private createDebugHudText(): Phaser.GameObjects.Text {
         return this.scene.add
             .text(12, 12, '', {
                 color: '#ffffff',
@@ -1029,19 +1157,19 @@ export class SnailPlayer {
             .setScrollFactor(0);
     }
 
-    private updateTemporaryDebugHudText(): void {
+    private updateDebugHudText(): void {
         const surface =
             this.snailMode === 'normal'
                 ? this.normalAttachmentSurface
-                : this.getTemporarySupportingSurface();
-        const backDirection = this.getTemporaryBackDirection();
+                : this.getSupportingSurface();
+        const backDirection = this.getBackDirection();
         const surfaceNormal = surface?.normal ?? { x: 0, y: 0 };
         const hudLines = [
             `mode: ${this.snailMode}`,
-            `facing: ${this.formatTemporaryVector(this.facingDirection)}`,
-            `back:   ${this.formatTemporaryVector(backDirection)}`,
+            `facing: ${this.formatVector(this.facingDirection)}`,
+            `back:   ${this.formatVector(backDirection)}`,
             `selected: ${surface?.edgeId ?? 'none'}`,
-            `selected normal: ${this.formatTemporaryVector(surfaceNormal)}`,
+            `selected normal: ${this.formatVector(surfaceNormal)}`,
             `selected material: ${surface?.material ?? 'none'}`,
             `recognized: ${this.recognizedAttachmentSurfaces.length}`,
         ];
@@ -1049,8 +1177,8 @@ export class SnailPlayer {
         this.recognizedAttachmentSurfaces.slice(0, 3).forEach((recognizedSurface, index) => {
             hudLines.push(
                 `recognized ${index + 1}: ${recognizedSurface.edgeId}`,
-                `  normal: ${this.formatTemporaryVector(recognizedSurface.normal)}`,
-                `  tangent: ${this.formatTemporaryVector(recognizedSurface.tangent)}`,
+                `  normal: ${this.formatVector(recognizedSurface.normal)}`,
+                `  tangent: ${this.formatVector(recognizedSurface.tangent)}`,
                 `  material: ${recognizedSurface.material}`,
             );
         });
@@ -1058,11 +1186,11 @@ export class SnailPlayer {
         this.debugHudText.setText(hudLines);
     }
 
-    private formatTemporaryVector(vector: Phaser.Types.Math.Vector2Like): string {
+    private formatVector(vector: Phaser.Types.Math.Vector2Like): string {
         return `(${vector.x.toFixed(2)}, ${vector.y.toFixed(2)})`;
     }
 
-    private drawTemporaryDirectionTriangle(
+    private drawDirectionTriangle(
         graphics: Phaser.GameObjects.Graphics,
         direction: Phaser.Types.Math.Vector2Like,
         color: number,
@@ -1094,38 +1222,37 @@ export class SnailPlayer {
         );
     }
 
-    private getTemporarySupportingSurface(): AttachmentSurface | undefined {
+    private getSupportingSurface(): AttachmentSurface | undefined {
         if (!this.snailMarker) {
             return undefined;
         }
 
         return this.playfield.getSupportingAttachmentSurface(
             this.snailMarker,
-            this.getTemporaryAttachmentProbe(),
-            TEMPORARY_SNAIL_CONTROL.contactTolerance,
+            this.getAttachmentProbe(),
+            SNAIL_CONTROL.contactTolerance,
         );
     }
 
-    private getTemporaryAttachmentProbe(): AttachmentProbe {
+    private getAttachmentProbe(): AttachmentProbe {
         if (this.snailMode === 'shell') {
             return {
-                tangentHalfLength: TEMPORARY_SNAIL_MARKER.shellRadius,
-                normalHalfDepth: TEMPORARY_SNAIL_MARKER.shellRadius,
+                tangentHalfLength: SNAIL_MARKER.shellRadius,
+                normalHalfDepth: SNAIL_MARKER.shellRadius,
             };
         }
 
         return {
             tangentHalfLength:
-                TEMPORARY_SNAIL_MARKER.normalSegmentSpacing / 2 +
-                TEMPORARY_SNAIL_MARKER.normalSegmentRadius,
-            normalHalfDepth: TEMPORARY_SNAIL_MARKER.normalSegmentRadius,
+                SNAIL_MARKER.normalSegmentSpacing / 2 + SNAIL_MARKER.normalSegmentRadius,
+            normalHalfDepth: SNAIL_MARKER.normalSegmentRadius,
         };
     }
 
-    private getTemporarySnailHalfSize(): number {
+    private getSnailHalfSize(): number {
         return this.snailMode === 'shell'
-            ? TEMPORARY_SNAIL_MARKER.shellRadius
-            : TEMPORARY_SNAIL_MARKER.normalSegmentRadius;
+            ? SNAIL_MARKER.shellRadius
+            : SNAIL_MARKER.normalSegmentRadius;
     }
 
     private normalizeVector(vector: Phaser.Types.Math.Vector2Like): Phaser.Types.Math.Vector2Like {

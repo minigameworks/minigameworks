@@ -1,14 +1,18 @@
 import type Phaser from 'phaser';
-import { GAME_CANVAS, TEMPORARY_SCENE_COLORS } from '../config/gameConstants';
+import { GAME_CANVAS, SCENE_COLORS } from '../config/gameConstants';
 import {
-    getTemporaryLevelField,
-    getTemporaryLevelSurfaceObjects,
-    TemporaryFieldObjectDefinition,
-    TemporaryLevelDefinition,
-    TemporarySurfaceObjectDefinition,
-    TemporarySurfaceMaterial,
-    TemporarySurfaceMaterialSection,
-} from './TemporaryLevelDefinitions';
+    getLevelField,
+    getLevelSurfaceLineObjects,
+    getLevelSurfaceObjects,
+    getLevelTerrainObjects,
+    FieldObjectDefinition,
+    LevelDefinition,
+    SurfaceLineObjectDefinition,
+    SurfaceObjectDefinition,
+    SurfaceMaterial,
+    SurfaceMaterialSection,
+    TerrainObjectDefinition,
+} from './LevelDefinitions';
 
 export type AttachmentSurface = {
     edgeId: string;
@@ -19,7 +23,7 @@ export type AttachmentSurface = {
     snapPosition: Phaser.Types.Math.Vector2Like;
     progress: number;
     length: number;
-    material: TemporarySurfaceMaterial;
+    material: SurfaceMaterial;
 };
 
 export type AttachmentProbe = {
@@ -37,8 +41,8 @@ export type SurfaceEdge = {
     start: Phaser.Types.Math.Vector2Like;
     end: Phaser.Types.Math.Vector2Like;
     normal: Phaser.Types.Math.Vector2Like;
-    material: TemporarySurfaceMaterial;
-    materialSections: TemporarySurfaceMaterialSection[];
+    material: SurfaceMaterial;
+    materialSections: SurfaceMaterialSection[];
 };
 
 type SolidSurfacePolygon = [
@@ -48,17 +52,27 @@ type SolidSurfacePolygon = [
     Phaser.Types.Math.Vector2Like,
 ];
 
-export class TemporaryPlayfield {
-    private readonly field: TemporaryFieldObjectDefinition;
-    private readonly surfaceObjects: TemporarySurfaceObjectDefinition[];
+type TerrainHorizontalRun = {
+    row: number;
+    column: number;
+    length: number;
+};
+
+export class Playfield {
+    private readonly field: FieldObjectDefinition;
+    private readonly surfaceObjects: SurfaceObjectDefinition[];
+    private readonly surfaceLineObjects: SurfaceLineObjectDefinition[];
+    private readonly terrainObjects: TerrainObjectDefinition[];
     private readonly surfaceEdges: SurfaceEdge[];
 
     public constructor(
         private readonly scene: Phaser.Scene,
-        private readonly level: TemporaryLevelDefinition,
+        private readonly level: LevelDefinition,
     ) {
-        this.field = getTemporaryLevelField(level);
-        this.surfaceObjects = getTemporaryLevelSurfaceObjects(level);
+        this.field = getLevelField(level);
+        this.surfaceObjects = getLevelSurfaceObjects(level);
+        this.surfaceLineObjects = getLevelSurfaceLineObjects(level);
+        this.terrainObjects = getLevelTerrainObjects(level);
         this.surfaceEdges = this.createSurfaceEdges();
     }
 
@@ -72,11 +86,11 @@ export class TemporaryPlayfield {
         const rightWallX = fieldX + this.field.width - this.field.wallThickness / 2;
         const wallCenterY = fieldY + this.field.height / 2;
 
-        graphics.fillStyle(TEMPORARY_SCENE_COLORS.background, 1);
+        graphics.fillStyle(SCENE_COLORS.background, 1);
         graphics.fillRect(0, fieldY, GAME_CANVAS.width, this.field.height);
-        graphics.fillStyle(TEMPORARY_SCENE_COLORS.playfield, 1);
+        graphics.fillStyle(SCENE_COLORS.playfield, 1);
         graphics.fillRect(fieldX, fieldY, this.field.width, this.field.height);
-        graphics.fillStyle(TEMPORARY_SCENE_COLORS.wall, 1);
+        graphics.fillStyle(SCENE_COLORS.wall, 1);
         graphics.fillRect(fieldX, fieldY, this.field.wallThickness, this.field.height);
         graphics.fillRect(
             fieldX + this.field.width - this.field.wallThickness,
@@ -84,7 +98,7 @@ export class TemporaryPlayfield {
             this.field.wallThickness,
             this.field.height,
         );
-        graphics.fillStyle(TEMPORARY_SCENE_COLORS.ground, 1);
+        graphics.fillStyle(SCENE_COLORS.ground, 1);
         graphics.fillRect(fieldX, this.getGroundTopY(), this.field.width, this.field.wallThickness);
 
         this.scene.matter.add.rectangle(
@@ -118,10 +132,33 @@ export class TemporaryPlayfield {
             },
         );
 
-        this.createTemporaryPlatforms(graphics);
+        this.createPlatforms(graphics);
+        this.createTerrainObjects(graphics);
+        this.createSurfaceLineColliders();
     }
 
-    private createTemporaryPlatforms(graphics: Phaser.GameObjects.Graphics): void {
+    private createTerrainObjects(graphics: Phaser.GameObjects.Graphics): void {
+        for (const terrain of this.terrainObjects) {
+            graphics.fillStyle(this.getSurfaceMaterialColor(terrain.material), 1);
+            this.createTerrainGraphics(graphics, terrain);
+        }
+    }
+
+    private createTerrainGraphics(
+        graphics: Phaser.GameObjects.Graphics,
+        terrain: TerrainObjectDefinition,
+    ): void {
+        for (const run of this.getTerrainHorizontalRuns(terrain)) {
+            graphics.fillRect(
+                terrain.x + run.column * terrain.tileSize,
+                terrain.y + run.row * terrain.tileSize,
+                run.length * terrain.tileSize,
+                terrain.tileSize,
+            );
+        }
+    }
+
+    private createPlatforms(graphics: Phaser.GameObjects.Graphics): void {
         for (const platform of this.surfaceObjects) {
             graphics.fillStyle(this.getSurfaceMaterialColor(platform.material), 1);
 
@@ -135,7 +172,7 @@ export class TemporaryPlayfield {
 
     private createThinSurfaceObject(
         graphics: Phaser.GameObjects.Graphics,
-        platform: TemporarySurfaceObjectDefinition,
+        platform: SurfaceObjectDefinition,
     ): void {
         graphics.save();
         graphics.translateCanvas(platform.x, platform.y);
@@ -156,7 +193,7 @@ export class TemporaryPlayfield {
         this.createThinSurfaceBody(platform);
     }
 
-    private createThinSurfaceBody(platform: TemporarySurfaceObjectDefinition): void {
+    private createThinSurfaceBody(platform: SurfaceObjectDefinition): void {
         this.scene.matter.add.rectangle(platform.x, platform.y, platform.width, platform.height, {
             isStatic: true,
             angle: this.degToRad(platform.angle),
@@ -166,7 +203,7 @@ export class TemporaryPlayfield {
 
     private createSolidSurfaceObject(
         graphics: Phaser.GameObjects.Graphics,
-        platform: TemporarySurfaceObjectDefinition,
+        platform: SurfaceObjectDefinition,
     ): void {
         const polygon = this.getSolidSurfacePolygon(platform);
 
@@ -177,7 +214,7 @@ export class TemporaryPlayfield {
     }
 
     private createSolidSurfaceFillBodies(
-        platform: TemporarySurfaceObjectDefinition,
+        platform: SurfaceObjectDefinition,
         polygon: SolidSurfacePolygon,
     ): void {
         const [topLeft, topRight] = polygon;
@@ -210,6 +247,78 @@ export class TemporaryPlayfield {
                 label: `${platform.id}-solid-fill`,
             });
         }
+    }
+
+    private createSurfaceLineColliders(): void {
+        for (const line of this.surfaceLineObjects) {
+            if (!line.colliderVertices || line.colliderVertices.length < 3) {
+                continue;
+            }
+
+            const center = this.getSurfaceLineColliderCenter(line.colliderVertices);
+
+            this.scene.matter.add.fromVertices(center.x, center.y, line.colliderVertices, {
+                isStatic: true,
+                label: `${line.id}-polygon`,
+            });
+        }
+    }
+
+    private getSurfaceLineColliderCenter(
+        vertices: Array<Phaser.Types.Math.Vector2Like>,
+    ): Phaser.Types.Math.Vector2Like {
+        const centroid = this.getPolygonCentroid(vertices);
+
+        return centroid ?? this.getPolygonAveragePoint(vertices);
+    }
+
+    private getPolygonCentroid(
+        vertices: Array<Phaser.Types.Math.Vector2Like>,
+    ): Phaser.Types.Math.Vector2Like | undefined {
+        let areaSum = 0;
+        let centerXSum = 0;
+        let centerYSum = 0;
+
+        for (let index = 0; index < vertices.length; index += 1) {
+            const current = vertices[index];
+            const next = vertices[(index + 1) % vertices.length];
+
+            if (!current || !next) {
+                continue;
+            }
+
+            const cross = current.x * next.y - next.x * current.y;
+
+            areaSum += cross;
+            centerXSum += (current.x + next.x) * cross;
+            centerYSum += (current.y + next.y) * cross;
+        }
+
+        if (Math.abs(areaSum) < 0.001) {
+            return undefined;
+        }
+
+        return {
+            x: centerXSum / (3 * areaSum),
+            y: centerYSum / (3 * areaSum),
+        };
+    }
+
+    private getPolygonAveragePoint(
+        vertices: Array<Phaser.Types.Math.Vector2Like>,
+    ): Phaser.Types.Math.Vector2Like {
+        const sum = vertices.reduce(
+            (currentSum, vertex) => ({
+                x: currentSum.x + vertex.x,
+                y: currentSum.y + vertex.y,
+            }),
+            { x: 0, y: 0 },
+        );
+
+        return {
+            x: sum.x / vertices.length,
+            y: sum.y / vertices.length,
+        };
     }
 
     public getSnailStartPosition(): Phaser.Types.Math.Vector2Like {
@@ -268,8 +377,61 @@ export class TemporaryPlayfield {
     private createSurfaceEdges(): SurfaceEdge[] {
         return [
             ...this.createBoundarySurfaceEdges(),
+            ...this.surfaceLineObjects.map((line) => this.createSurfaceLineEdge(line)),
             ...this.surfaceObjects.flatMap((platform) => this.createObjectSurfaceEdges(platform)),
         ];
+    }
+
+    private createSurfaceLineEdge(line: SurfaceLineObjectDefinition): SurfaceEdge {
+        return {
+            id: line.id,
+            start: line.start,
+            end: line.end,
+            normal: line.normal,
+            material: line.material,
+            materialSections: line.surfaceSections,
+        };
+    }
+
+    private getTerrainHorizontalRuns(terrain: TerrainObjectDefinition): TerrainHorizontalRun[] {
+        const runs: TerrainHorizontalRun[] = [];
+
+        for (let row = 0; row < terrain.rows; row += 1) {
+            let column = 0;
+
+            while (column < terrain.columns) {
+                if (!this.isTerrainTileFilled(terrain, column, row)) {
+                    column += 1;
+                    continue;
+                }
+
+                const runStart = column;
+
+                while (column < terrain.columns && this.isTerrainTileFilled(terrain, column, row)) {
+                    column += 1;
+                }
+
+                runs.push({
+                    row,
+                    column: runStart,
+                    length: column - runStart,
+                });
+            }
+        }
+
+        return runs;
+    }
+
+    private isTerrainTileFilled(
+        terrain: TerrainObjectDefinition,
+        column: number,
+        row: number,
+    ): boolean {
+        if (column < 0 || row < 0 || column >= terrain.columns || row >= terrain.rows) {
+            return false;
+        }
+
+        return terrain.tiles[row * terrain.columns + column] ?? false;
     }
 
     private createBoundarySurfaceEdges(): SurfaceEdge[] {
@@ -308,7 +470,7 @@ export class TemporaryPlayfield {
         ];
     }
 
-    private createBoundaryWallMaterialSections(wallX: number): TemporarySurfaceMaterialSection[] {
+    private createBoundaryWallMaterialSections(wallX: number): SurfaceMaterialSection[] {
         const fieldTopY = this.getFieldY();
         const groundTopY = this.getGroundTopY();
         const wallLength = groundTopY - fieldTopY;
@@ -370,7 +532,7 @@ export class TemporaryPlayfield {
     }
 
     private isBoundaryWallMaterialObject(
-        platform: TemporarySurfaceObjectDefinition,
+        platform: SurfaceObjectDefinition,
         wallX: number,
     ): boolean {
         const hasMaterialOverride =
@@ -389,7 +551,7 @@ export class TemporaryPlayfield {
         return isVertical && overlapsWallX;
     }
 
-    private isBoundaryWallMaterialMarker(platform: TemporarySurfaceObjectDefinition): boolean {
+    private isBoundaryWallMaterialMarker(platform: SurfaceObjectDefinition): boolean {
         const fieldX = this.getFieldX();
         const leftWallRightX = fieldX + this.field.wallThickness;
         const rightWallLeftX = fieldX + this.field.width - this.field.wallThickness;
@@ -400,7 +562,7 @@ export class TemporaryPlayfield {
         );
     }
 
-    private createObjectSurfaceEdges(platform: TemporarySurfaceObjectDefinition): SurfaceEdge[] {
+    private createObjectSurfaceEdges(platform: SurfaceObjectDefinition): SurfaceEdge[] {
         if (this.isBoundaryWallMaterialMarker(platform)) {
             return [];
         }
@@ -474,7 +636,7 @@ export class TemporaryPlayfield {
     }
 
     private createTopSurfaceEdges(
-        platform: TemporarySurfaceObjectDefinition,
+        platform: SurfaceObjectDefinition,
         topLeft: Phaser.Types.Math.Vector2Like,
         topRight: Phaser.Types.Math.Vector2Like,
         normal: Phaser.Types.Math.Vector2Like,
@@ -491,7 +653,7 @@ export class TemporaryPlayfield {
         ];
     }
 
-    private getThinSurfaceCorners(platform: TemporarySurfaceObjectDefinition): {
+    private getThinSurfaceCorners(platform: SurfaceObjectDefinition): {
         topLeft: Phaser.Types.Math.Vector2Like;
         topRight: Phaser.Types.Math.Vector2Like;
         bottomRight: Phaser.Types.Math.Vector2Like;
@@ -601,15 +763,16 @@ export class TemporaryPlayfield {
             return;
         }
 
-        if (normalDistance < 0) {
+        if (normalDistance < -tolerance) {
             return;
         }
 
         const clampedTangentDistance = this.clamp(tangentDistance, 0, edgeLength);
         const progress = clampedTangentDistance / edgeLength;
+        const isShallowInsideSurface = normalDistance < 0;
         const distance = Math.abs(normalDistance - probe.normalHalfDepth);
 
-        if (distance > tolerance) {
+        if (!isShallowInsideSurface && distance > tolerance) {
             return;
         }
 
@@ -623,7 +786,11 @@ export class TemporaryPlayfield {
         };
         const snapDistance = Math.hypot(snapPosition.x - position.x, snapPosition.y - position.y);
 
-        if (snapDistance > tolerance) {
+        const allowedSnapDistance = isShallowInsideSurface
+            ? tolerance + probe.normalHalfDepth
+            : tolerance;
+
+        if (snapDistance > allowedSnapDistance) {
             return;
         }
 
@@ -645,7 +812,7 @@ export class TemporaryPlayfield {
 
     private drawSurfaceMaterialSections(
         graphics: Phaser.GameObjects.Graphics,
-        platform: TemporarySurfaceObjectDefinition,
+        platform: SurfaceObjectDefinition,
     ): void {
         for (const section of platform.surfaceSections) {
             if (section.material === platform.material) {
@@ -671,10 +838,7 @@ export class TemporaryPlayfield {
         }
     }
 
-    private getSurfaceEdgeMaterialAtProgress(
-        edge: SurfaceEdge,
-        progress: number,
-    ): TemporarySurfaceMaterial {
+    private getSurfaceEdgeMaterialAtProgress(edge: SurfaceEdge, progress: number): SurfaceMaterial {
         const section = edge.materialSections.find((currentSection) => {
             const startRatio = Math.min(currentSection.startRatio, currentSection.endRatio);
             const endRatio = Math.max(currentSection.startRatio, currentSection.endRatio);
@@ -685,10 +849,8 @@ export class TemporaryPlayfield {
         return section?.material ?? edge.material;
     }
 
-    private getSurfaceMaterialColor(material: TemporarySurfaceMaterial): number {
-        return material === 'slippery'
-            ? TEMPORARY_SCENE_COLORS.slipperyPlatform
-            : TEMPORARY_SCENE_COLORS.platform;
+    private getSurfaceMaterialColor(material: SurfaceMaterial): number {
+        return material === 'slippery' ? SCENE_COLORS.slipperyPlatform : SCENE_COLORS.platform;
     }
 
     private rotateVector(
@@ -717,9 +879,7 @@ export class TemporaryPlayfield {
         };
     }
 
-    private getSolidSurfacePolygon(
-        platform: TemporarySurfaceObjectDefinition,
-    ): SolidSurfacePolygon {
+    private getSolidSurfacePolygon(platform: SurfaceObjectDefinition): SolidSurfacePolygon {
         const angle = this.degToRad(platform.angle);
         const topLeft = this.toWorldPlatformPoint(
             { x: -platform.width / 2, y: -platform.height / 2 },
@@ -758,7 +918,7 @@ export class TemporaryPlayfield {
 
     private toWorldPlatformPoint(
         localPoint: Phaser.Types.Math.Vector2Like,
-        platform: TemporarySurfaceObjectDefinition,
+        platform: SurfaceObjectDefinition,
         angle: number,
     ): Phaser.Types.Math.Vector2Like {
         const rotatedPoint = this.rotateVector(localPoint, angle);
